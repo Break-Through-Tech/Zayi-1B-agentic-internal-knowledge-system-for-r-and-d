@@ -3,11 +3,16 @@
 Splits cleaned page records into retrieval-sized chunks whose token counts
 are measured with the embedding model's own tokenizer — the limit that
 actually matters when the chunks are embedded in Task 5 (models silently
-truncate past their max sequence length).
+truncate past their max sequence length). `chunk_size` is the model's max
+sequence length: the splitter budget subtracts the special tokens ([CLS],
+[SEP]) the tokenizer adds, so encoded chunks genuinely fit.
 
-Chunk metadata is flat scalars only, which is what ChromaDB accepts.
+Chunk metadata is flat scalars only (enforced), which is what ChromaDB
+accepts. Chunk ids embed a fingerprint of the chunking configuration so
+chunks from different configs can never collide inside one collection.
 """
 
+import hashlib
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -18,10 +23,12 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # chunk sizes are measured with the right tokenizer.
 DEFAULT_TOKENIZER = "BAAI/bge-small-en-v1.5"
 
+_SCALAR_TYPES = (str, int, float, bool)
+
 
 @dataclass(frozen=True)
 class ChunkingConfig:
-    chunk_size: int = 512  # tokens
+    chunk_size: int = 512  # tokens, including the model's special tokens
     chunk_overlap: int = 64  # tokens
     tokenizer_name: str = DEFAULT_TOKENIZER
     # "page": chunks never cross page boundaries (every chunk cites exactly
@@ -38,15 +45,36 @@ def get_tokenizer(name=DEFAULT_TOKENIZER):
 
 
 def count_tokens(text, tokenizer_name=DEFAULT_TOKENIZER):
+    """Content tokens only (no [CLS]/[SEP])."""
     tokenizer = get_tokenizer(tokenizer_name)
     return len(tokenizer.encode(text, add_special_tokens=False))
 
 
+def config_fingerprint(config, cleaner_version="raw"):
+    """Short stable id for (chunking config, cleaning pass). Baked into every
+    chunk id so runs with different settings can never silently mix or
+    collide when upserted into the same ChromaDB collection."""
+    key = "|".join(
+        [
+            config.tokenizer_name,
+            str(config.chunk_size),
+            str(config.chunk_overlap),
+            config.scope,
+            cleaner_version,
+        ]
+    )
+    return hashlib.sha1(key.encode()).hexdigest()[:8]
+
+
 def _make_splitter(config):
+    content_budget = config.chunk_size - get_tokenizer(
+        config.tokenizer_name
+    ).num_special_tokens_to_add()
     return RecursiveCharacterTextSplitter(
-        chunk_size=config.chunk_size,
+        chunk_size=content_budget,
         chunk_overlap=config.chunk_overlap,
         length_function=lambda t: count_tokens(t, config.tokenizer_name),
+        add_start_index=True,
     )
 
 
@@ -58,6 +86,9 @@ def build_chunks(pages, config=ChunkingConfig()):
     Pages must already be cleaned; any extra scalar fields on the page
     records (e.g. "cleaner") pass through into chunk metadata untouched, so
     fields added upstream in Task 3 (like section labels) flow in for free.
+    In paper scope, pass-through metadata comes from the page where the
+    chunk STARTS. Non-scalar metadata values are rejected loudly rather
+    than stored broken in ChromaDB.
     """
     if config.scope not in ("page", "paper"):
         raise ValueError(f"unknown scope: {config.scope!r}")
@@ -76,10 +107,13 @@ def build_chunks(pages, config=ChunkingConfig()):
         else:
             pieces = _split_across_pages(paper_pages, splitter)
 
-        for index, (text, first_page, page_start, page_end) in enumerate(pieces):
+        for index, (text, source_page, page_start, page_end) in enumerate(pieces):
+            fingerprint = config_fingerprint(
+                config, source_page.get("cleaner", "raw")
+            )
             metadata = {
                 key: value
-                for key, value in first_page.items()
+                for key, value in source_page.items()
                 if key not in ("text", "page_number")
             }
             metadata.update(
@@ -90,10 +124,17 @@ def build_chunks(pages, config=ChunkingConfig()):
                 chunk_size=config.chunk_size,
                 chunk_overlap=config.chunk_overlap,
                 scope=config.scope,
+                config_id=fingerprint,
             )
+            for key, value in metadata.items():
+                if not isinstance(value, _SCALAR_TYPES) or value is None:
+                    raise ValueError(
+                        f"metadata field {key!r} is {type(value).__name__}; "
+                        "ChromaDB metadata must be str/int/float/bool"
+                    )
             chunks.append(
                 {
-                    "chunk_id": f"{first_page['paper_id']}_c{index:04d}",
+                    "chunk_id": f"{source_page['paper_id']}_{fingerprint}_c{index:04d}",
                     "text": text,
                     "metadata": metadata,
                 }
@@ -110,23 +151,53 @@ def _split_within_pages(paper_pages, splitter):
 
 def _split_across_pages(paper_pages, splitter):
     """Join the paper's pages, split, then map each chunk back to the page
-    range it spans via character offsets."""
-    spans = []  # (start_offset, end_offset, page_number)
+    range it spans via verified character offsets.
+
+    The splitter reports each chunk's start offset; every offset is verified
+    against the actual text (and repaired by a bounded forward search if the
+    splitter's report is off) before pages are assigned, so a chunk's cited
+    span always contains the chunk's exact text. For byte-identical repeated
+    passages the chosen occurrence can be ambiguous, but any cited page
+    genuinely contains the text.
+    """
+    spans = []  # (start_offset, end_offset, page_record)
     parts = []
     offset = 0
     for page in paper_pages:
         parts.append(page["text"])
-        spans.append((offset, offset + len(page["text"]), page["page_number"]))
+        spans.append((offset, offset + len(page["text"]), page))
         offset += len(page["text"]) + 1  # +1 for the joining newline
     full_text = "\n".join(parts)
 
-    search_from = 0
-    for text in splitter.split_text(full_text):
-        start = full_text.index(text, search_from)
-        end = start + len(text)
-        search_from = start + 1  # overlapping chunks start after the previous one
-        pages_hit = [p for s, e, p in spans if s < end and e > start]
-        yield text, paper_pages[0], pages_hit[0], pages_hit[-1]
+    previous_start, previous_end = -1, -1
+    for doc in splitter.create_documents([full_text]):
+        text = doc.page_content
+        start = doc.metadata.get("start_index", -1)
+        valid = (
+            start > previous_start
+            and start + len(text) > previous_end
+            and full_text.startswith(text, start)
+        )
+        if not valid:
+            # walk occurrences forward until one keeps chunk order intact
+            start = full_text.find(text, previous_start + 1)
+            while start != -1 and start + len(text) <= previous_end:
+                start = full_text.find(text, start + 1)
+            if start == -1:
+                raise ValueError(
+                    "could not locate a chunk in its source paper; "
+                    "use scope='page' for this corpus"
+                )
+        previous_start, previous_end = start, start + len(text)
+
+        pages_hit = [
+            record
+            for span_start, span_end, record in spans
+            if span_start < previous_end and span_end > previous_start
+        ]
+        yield text, pages_hit[0], pages_hit[0]["page_number"], pages_hit[-1][
+            "page_number"
+        ]
 
 
 def chunk_stats(chunks):
