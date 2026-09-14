@@ -90,13 +90,30 @@ def test_paper_scope_cites_the_actual_source_pages():
     assert all(c["metadata"]["page_start"] >= 2 for c in chunks if "bravo" in c["text"] and "alpha" not in c["text"])
 
 
-def test_paper_scope_handles_identical_repeated_pages():
-    # regression: identical pages used to attribute every chunk to page 1
-    text = "the attention mechanism computes queries keys values.\n" * 30
+@pytest.mark.parametrize(
+    "text,size,overlap",
+    [
+        ("the attention mechanism computes queries keys values.\n" * 30, 128, 0),
+        # regressions: repeated text with nonzero overlap used to raise
+        # "could not locate a chunk in its source paper"
+        ("data model.\n" * 60, 20, 5),
+        ("data model.\n" * 60, 40, 32),
+        ("the attention mechanism computes queries keys values over sequences.\n" * 120, 512, 64),
+    ],
+)
+def test_paper_scope_handles_identical_repeated_pages(text, size, overlap):
     pages = [_page(1, text), _page(2, text)]
-    chunks = build_chunks(pages, ChunkingConfig(chunk_size=128, chunk_overlap=0, scope="paper"))
+    chunks = build_chunks(
+        pages, ChunkingConfig(chunk_size=size, chunk_overlap=overlap, scope="paper")
+    )
     assert chunks[-1]["metadata"]["page_end"] == 2
     assert 2 in {c["metadata"]["page_start"] for c in chunks}
+    # every citation must contain its chunk's text
+    both = _normalized(text + "\n" + text)
+    single = _normalized(text)
+    for c in chunks:
+        cited = both if c["metadata"]["page_start"] != c["metadata"]["page_end"] else single
+        assert _normalized(c["text"]) in cited
 
 
 def test_paper_scope_metadata_comes_from_chunk_start_page():

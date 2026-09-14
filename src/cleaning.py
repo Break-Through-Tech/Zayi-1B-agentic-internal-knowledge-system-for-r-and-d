@@ -12,7 +12,7 @@ ligatures (~690), C0 control characters (~2,400), Windows-1252 mojibake
 
 import re
 
-CLEANER_VERSION = "seed-v2"
+CLEANER_VERSION = "seed-v3"
 
 # Ligatures as extracted from the PDFs
 _LIGATURES = {
@@ -61,15 +61,18 @@ def build_vocab(texts):
 
 def _join_wrap(match, vocab):
     """A line-wrap hyphen is only removed when the corpus itself shows the
-    fused word exists; if the corpus instead shows the hyphenated compound
-    inline (e.g. "fine-tuning", "state-of-the-art"), the hyphen is real and
-    stays. Compounds that already contain a hyphen default to keeping it."""
+    fused word exists ("atten-\\ntion" fuses because "attention" appears
+    elsewhere); if the corpus shows the hyphenated compound inline
+    ("fine-tuning", "state-of-the-art"), the hyphen is real and stays.
+    Without evidence either way the hyphen is KEPT: a spurious hyphen in a
+    rare word is recoverable, a fabricated fused word ("crossencoder") is
+    not."""
     left, right = match.group(1), match.group(2)
     hyphenated = f"{left}-{right}".lower()
     fused = f"{left}{right}".lower()
     if hyphenated in vocab:
         return f"{left}-{right}"
-    if fused in vocab or "-" not in left:
+    if fused in vocab:
         return f"{left}{right}"
     return f"{left}-{right}"
 

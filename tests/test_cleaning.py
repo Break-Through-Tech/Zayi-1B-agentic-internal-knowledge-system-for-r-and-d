@@ -19,8 +19,12 @@ def test_maps_cp1252_strays():
     assert clean_text("\x95 item") == "• item"
 
 
-def test_joins_simple_line_wraps_by_default():
-    assert clean_text("atten-\ntion is all") == "attention is all"
+def test_keeps_hyphen_without_corpus_evidence():
+    # conservative default: a wrap is only fused when the corpus proves the
+    # fused word exists; otherwise fabricating "crossencoder"-style words
+    # damages retrieval terms (regression from review)
+    assert clean_text("atten-\ntion is all") == "atten-tion is all"
+    assert clean_text("cross-\nencoder") == "cross-encoder"
 
 
 def test_keeps_hyphen_when_corpus_shows_compound_inline():
@@ -66,6 +70,27 @@ def test_clean_pages_uses_whole_corpus_as_evidence():
     ]
     cleaned = clean_pages(pages)
     assert cleaned[1]["text"] == "results of fine-tuning improve"
+
+
+def test_real_corpus_compounds_survive_cleaning():
+    # regression: these all came out fused ("crossencoder", "semisupervised",
+    # ...) from the actual dataset; asserts against the real corpus, with no
+    # injected vocabulary
+    from src.data_io import load_pages
+
+    cleaned = " ".join(p["text"] for p in clean_pages(load_pages())).lower()
+    for fused in (
+        "crossencoder",
+        "stackaugmented",
+        "semisupervised",
+        "parentchild",
+        "promptbased",
+        "questiondocument",
+    ):
+        assert fused not in cleaned, fused
+    # corpus evidence still fuses genuinely wrapped words
+    assert "atten-tion" not in cleaned
+    assert "retrie-val" not in cleaned
 
 
 def test_clean_pages_preserves_metadata_and_tags_version():

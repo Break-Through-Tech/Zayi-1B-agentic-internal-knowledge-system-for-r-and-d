@@ -105,7 +105,7 @@ def build_chunks(pages, config=ChunkingConfig()):
         if config.scope == "page":
             pieces = _split_within_pages(paper_pages, splitter)
         else:
-            pieces = _split_across_pages(paper_pages, splitter)
+            pieces = _split_across_pages(paper_pages, splitter, config)
 
         for index, (text, source_page, page_start, page_end) in enumerate(pieces):
             fingerprint = config_fingerprint(
@@ -149,55 +149,62 @@ def _split_within_pages(paper_pages, splitter):
             yield text, page, page["page_number"], page["page_number"]
 
 
-def _split_across_pages(paper_pages, splitter):
-    """Join the paper's pages, split, then map each chunk back to the page
-    range it spans via verified character offsets.
-
-    The splitter reports each chunk's start offset; every offset is verified
-    against the actual text (and repaired by a bounded forward search if the
-    splitter's report is off) before pages are assigned, so a chunk's cited
-    span always contains the chunk's exact text. For byte-identical repeated
-    passages the chosen occurrence can be ambiguous, but any cited page
-    genuinely contains the text.
+def _split_across_pages(paper_pages, splitter, config):
+    """Chunks that may span page boundaries, with provenance tracked by
+    construction: every page is split into line pieces that carry their page
+    number, and pieces are merged into chunks under the token budget with
+    token overlap carried between consecutive chunks. Because a chunk is
+    assembled FROM tagged pieces, its page range is exact by definition —
+    there is no re-locating of chunk text afterwards (searching for a chunk's
+    text in the joined paper is ambiguous whenever text repeats, and broke in
+    two separate ways before this design).
     """
-    spans = []  # (start_offset, end_offset, page_record)
-    parts = []
-    offset = 0
+    budget = config.chunk_size - get_tokenizer(
+        config.tokenizer_name
+    ).num_special_tokens_to_add()
+
+    pieces = []  # (text, token_count, page_record)
     for page in paper_pages:
-        parts.append(page["text"])
-        spans.append((offset, offset + len(page["text"]), page))
-        offset += len(page["text"]) + 1  # +1 for the joining newline
-    full_text = "\n".join(parts)
+        for line in page["text"].split("\n"):
+            if not line.strip():
+                continue
+            line_tokens = count_tokens(line, config.tokenizer_name)
+            if line_tokens > budget:
+                for part in splitter.split_text(line):
+                    pieces.append(
+                        (part, count_tokens(part, config.tokenizer_name), page)
+                    )
+            else:
+                pieces.append((line, line_tokens, page))
 
-    previous_start, previous_end = -1, -1
-    for doc in splitter.create_documents([full_text]):
-        text = doc.page_content
-        start = doc.metadata.get("start_index", -1)
-        valid = (
-            start > previous_start
-            and start + len(text) > previous_end
-            and full_text.startswith(text, start)
-        )
-        if not valid:
-            # walk occurrences forward until one keeps chunk order intact
-            start = full_text.find(text, previous_start + 1)
-            while start != -1 and start + len(text) <= previous_end:
-                start = full_text.find(text, start + 1)
-            if start == -1:
-                raise ValueError(
-                    "could not locate a chunk in its source paper; "
-                    "use scope='page' for this corpus"
-                )
-        previous_start, previous_end = start, start + len(text)
+    current = []  # accumulated (text, token_count, page_record)
+    current_tokens = 0
+    for piece in pieces:
+        piece_tokens = piece[1]
+        if current and current_tokens + piece_tokens > budget:
+            yield _emit(current)
+            # carry the trailing pieces that fit the overlap into the next chunk
+            tail = []
+            tail_tokens = 0
+            for text, tokens, page in reversed(current):
+                if tail_tokens + tokens > config.chunk_overlap:
+                    break
+                tail.insert(0, (text, tokens, page))
+                tail_tokens += tokens
+            if tail_tokens + piece_tokens > budget:
+                tail, tail_tokens = [], 0
+            current, current_tokens = tail, tail_tokens
+        current.append(piece)
+        current_tokens += piece_tokens
+    if current:
+        yield _emit(current)
 
-        pages_hit = [
-            record
-            for span_start, span_end, record in spans
-            if span_start < previous_end and span_end > previous_start
-        ]
-        yield text, pages_hit[0], pages_hit[0]["page_number"], pages_hit[-1][
-            "page_number"
-        ]
+
+def _emit(pieces):
+    text = "\n".join(piece_text for piece_text, _, _ in pieces)
+    first_page = pieces[0][2]
+    last_page = pieces[-1][2]
+    return text, first_page, first_page["page_number"], last_page["page_number"]
 
 
 def chunk_stats(chunks):
