@@ -188,6 +188,19 @@ def test_stats_shape(one_paper_pages):
     assert stats["tokens_min"] <= stats["tokens_mean"] <= stats["tokens_max"]
 
 
+def test_default_data_prefers_ocr_corrected_source():
+    # the corrected file (OCR-fixed ReAct figure pages) must be picked up
+    # when present, so the fixes actually reach the chunks
+    from src.data_io import DEFAULT_DATA_PATH, load_pages
+
+    if DEFAULT_DATA_PATH.name == "curated_papers_text_corrected.json":
+        react_p2 = next(
+            p for p in load_pages()
+            if p["paper_id"] == "2210.03629" and p["page_number"] == 2
+        )
+        assert not any(ord(c) < 32 and c not in "\n\t" for c in react_p2["text"])
+
+
 def test_team_cleaned_adapter_matches_chunker_schema():
     from src.data_io import load_team_cleaned_pages
 
