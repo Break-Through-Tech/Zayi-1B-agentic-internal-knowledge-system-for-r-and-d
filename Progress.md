@@ -80,5 +80,7 @@ Tasks 1–4 completed. Task 5 initial implementation done. Remaining for the mil
 
 ## Notes
 
+- Chunk-config sweep (2026-09-19, 20 self-labeled queries in `data/eval_queries_sample.json`, 6 configs × rerank on/off): all configs score hit@1 0.85–0.95 and hit@3 0.95–1.0 — differences are 1–2 queries, i.e. within noise at this sample size. Two consistent signals: FlashRank reranking lifted or matched hit@1 in every config (weakest config 0.85 → 0.95 with rerank), and smaller chunks (256–384) edge out 512 without rerank. Decision: keep the current default until the official ground-truth Q&A set arrives, then re-run this sweep for the final call; use `rerank=True` in the October generator.
+
 - Reference-heavy pages may introduce noise into semantic retrieval.
 - Word counts and model token counts diverge significantly on this corpus: measured with the bge-small tokenizer, ~62% of the 400-word chunks exceed 512 tokens (max ~1,979). Embedding models silently truncate input past their limit (`all-MiniLM-L6-v2` at 256 tokens, `bge-small-en-v1.5` at 512), so over-length chunks are only partially represented by their embeddings. Sizing chunks in tokens (with the same tokenizer as the embedding model) avoids this.
