@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Tasks 1–3 completed. Task 4 implemented in two variants (consolidation pending). Task 5 started.
+Tasks 1–4 completed. Task 5 initial implementation done. Remaining for the milestone: settle on the canonical cleaned data file and validate retrieval once the ground-truth Q&A set is available.
 
 ## Completed
 
@@ -51,26 +51,32 @@ Tasks 1–3 completed. Task 4 implemented in two variants (consolidation pending
   - Hyphenated compounds are sometimes fused during de-hyphenation (e.g. "state-of-the-art" → "state-of-theart", "cross-encoder" → "crossencoder").
   - The `section` values in `data/cleaned_papers_text.json` are unreliable (they frequently capture table/algorithm text rather than section names).
 
+### Task 4: Implement and Test Text Chunking
+
+- Consolidated on the token-aware implementation (agreed with Brayden): chunk sizes are measured with the embedding model's own tokenizer so every chunk fits the model's input limit, including special tokens. The earlier word-based version (400 words / 80 overlap) established the experiment framework and remains in git history; word-based sizing was retired because ~62% of 400-word chunks exceeded the 512-token model limit (see Notes).
+- Implementation lives in importable modules (`src/cleaning.py`, `src/chunking.py`) with a pytest suite, so later tasks import the same code the notebook demonstrates.
+- Configurable chunk size / overlap / scope ("page": each chunk cites exactly one page; "paper": chunks may span pages and cite a page range). Chunk ids embed a config fingerprint so different experimental configs can never collide in the vector store.
+- `notebooks/03_text_chunking.ipynb` documents cleaning before/after, full-corpus chunking stats, a 12-config comparison, and a same-passage chunk-size comparison.
+
+### Task 5: Generate Embeddings & Build ChromaDB Knowledge Base (initial implementation)
+
+- Initial implementation done: `src/embedding.py` + `src/knowledge_base.py` embed the chunks with `bge-small-en-v1.5` (512-token input limit — matches the chunk budget) and store text + metadata + vectors in ChromaDB, one collection per chunking config.
+- `notebooks/04_knowledge_base.ipynb` builds the knowledge base (557 vectors) and runs sample semantic-search queries: 5/6 return the expected paper at rank 1, with page-level citations on every result (the miss retrieved Self-RAG content from the RAG survey paper, which covers it).
+- The ChromaDB store is generated locally (`chroma/`, gitignored) — rebuilt from the notebook in about a minute, so no binary store lives in git.
+
 ## In Progress
 
-- **Task 4 — Text Chunking (two implementations, consolidation pending):**
-  - `notebooks/03_text_chunking.ipynb` on main: word-based chunking (400 words / 80 overlap), size experiments, and page-fidelity/phrase-retention checks.
-  - `task4-text-chunking` branch: token-aware chunking as importable modules (`src/`) with 31 tests and its own notebook — chunk sizes measured with the embedding model's tokenizer so every chunk fits the model's input limit; page or paper scope; config-fingerprinted chunk ids.
-  - Plan: agree on one approach (or merge the two) before the ChromaDB knowledge base is finalized.
-- **Task 5 — Embeddings & ChromaDB Knowledge Base (started):**
-  - `notebooks/04_embeddings_chromadb.ipynb` on main: end-to-end first version — embeds the word-based chunks with `all-MiniLM-L6-v2` into a persistent ChromaDB at `data/chroma_db`, with sample semantic-search queries and result checks.
-  - A token-aware variant building on the branch pipeline is in progress on a separate branch.
+- 
 
 ## Blockers
 
-- Team decision needed: canonical cleaned JSON, and which chunking implementation feeds the final knowledge base.
+- Team decision still open: which cleaned JSON is canonical — `data/cleaned_papers_text.json` vs `data/processed/cleaned_papers.json` (see Task 3 open items). The chunking pipeline can consume either via `src/data_io.py`.
 
 ## Next Steps
 
-- Consolidate the two Task 4 implementations and re-generate the knowledge base from the agreed chunks.
-- Align chunk sizes with the embedding model's token limit (see Notes).
-- Decide whether `data/chroma_db/` (binary store, ~10 MB) should stay in git or be gitignored and rebuilt locally from the notebook.
-- Prepare for the November evaluation: retrieval accuracy against the ground-truth Q&A pairs at page level.
+- Pick the canonical cleaned file and re-point the pipeline input at it.
+- When the ground-truth Q&A set arrives (November): measure retrieval accuracy per chunking config (collections are per-config precisely so configs can be compared head-to-head) and tune chunk size / overlap / k.
+- October milestone: baseline RAG pipeline (LangChain + Gemini) on top of `src/knowledge_base.search`.
 
 ## Notes
 

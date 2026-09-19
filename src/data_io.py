@@ -36,3 +36,29 @@ def iter_pages(papers):
 def load_pages(path=DEFAULT_DATA_PATH):
     """Convenience: load and flatten in one call."""
     return list(iter_pages(load_papers(path)))
+
+
+# Task 3's cleaned output (flat records with `cleaned_text`); adapter so the
+# chunking pipeline can consume it instead of the interim cleaner once the
+# team settles on a canonical cleaned file.
+TEAM_CLEANED_PATH = DEFAULT_DATA_PATH.parent / "processed" / "cleaned_papers.json"
+
+
+def load_team_cleaned_pages(path=TEAM_CLEANED_PATH):
+    """Team-cleaned records mapped to the same page-record shape the chunker
+    expects. These records are already cleaned — pass them straight to
+    `build_chunks`, not through `clean_pages`."""
+    with open(path, "r", encoding="utf-8") as f:
+        records = json.load(f)
+    return [
+        {
+            "paper_id": r["paper_id"],
+            "paper_title": r["title"],
+            "category": r["category"],
+            "pdf_url": r["pdf_url"],
+            "page_number": r["page_number"],
+            "text": r["cleaned_text"],
+            "cleaner": "team-task3-v1",
+        }
+        for r in records
+    ]

@@ -188,6 +188,18 @@ def test_stats_shape(one_paper_pages):
     assert stats["tokens_min"] <= stats["tokens_mean"] <= stats["tokens_max"]
 
 
+def test_team_cleaned_adapter_matches_chunker_schema():
+    from src.data_io import load_team_cleaned_pages
+
+    pages = load_team_cleaned_pages()
+    assert len(pages) == 218
+    required = {"paper_id", "paper_title", "category", "pdf_url", "page_number", "text", "cleaner"}
+    assert required <= set(pages[0])
+    # adapter output chunks without errors and keeps citations
+    chunks = build_chunks(pages[:5], ChunkingConfig(chunk_size=256, chunk_overlap=0))
+    assert chunks and chunks[0]["metadata"]["cleaner"] == "team-task3-v1"
+
+
 def test_count_tokens_counts_content_only():
     tokenizer = get_tokenizer()
     text = "retrieval augmented generation"
