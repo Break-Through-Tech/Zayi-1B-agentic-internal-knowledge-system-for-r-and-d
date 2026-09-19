@@ -58,11 +58,16 @@ Tasks 1–4 completed. Task 5 initial implementation done. Remaining for the mil
 - Configurable chunk size / overlap / scope ("page": each chunk cites exactly one page; "paper": chunks may span pages and cite a page range). Chunk ids embed a config fingerprint so different experimental configs can never collide in the vector store.
 - `notebooks/03_text_chunking.ipynb` documents cleaning before/after, full-corpus chunking stats, a 12-config comparison, and a same-passage chunk-size comparison.
 
-### Task 5: Generate Embeddings & Build ChromaDB Knowledge Base (initial implementation)
+### Task 5: Generate Embeddings & Build ChromaDB Knowledge Base
 
 - Initial implementation done: `src/embedding.py` + `src/knowledge_base.py` embed the chunks with `bge-small-en-v1.5` (512-token input limit — matches the chunk budget) and store text + metadata + vectors in ChromaDB, one collection per chunking config.
-- `notebooks/04_knowledge_base.ipynb` builds the knowledge base (557 vectors) and runs sample semantic-search queries: 5/6 return the expected paper at rank 1, with page-level citations on every result (the miss retrieved Self-RAG content from the RAG survey paper, which covers it).
+- `notebooks/04_knowledge_base.ipynb` builds the knowledge base (557 vectors) and runs sample semantic-search queries with page-level citations on every result.
 - The ChromaDB store is generated locally (`chroma/`, gitignored) — rebuilt from the notebook in about a minute, so no binary store lives in git.
+- Retrieval quality is now **measured**, not assumed: `src/retrieval_eval.py` computes deterministic hit@k over labeled queries, and `data/eval_queries_sample.json` holds a 20-query labeled set (2 per paper). Current numbers on the default config: hit@1 0.85–0.95 and hit@3 0.95–1.0 across configs (see Notes for the full sweep).
+- Optional local cross-encoder reranking (stretch goal 2): `search(..., rerank=True)` re-scores candidates with FlashRank — it lifted or matched hit@1 in every tested config, so the October generator should use it.
+- Safety guard: each collection records the embedding model that built it, and `search` refuses queries with a mismatched model instead of returning cross-space garbage.
+- The pipeline reads `data/curated_papers_text_corrected.json` (the OCR-repaired source from notebook 0.5) when present, falling back to the original — so the ReAct figure-text fixes flow into the chunks.
+- Test suite: 42 passing tests across data loading, cleaning, chunking, embeddings, knowledge base, and evaluation.
 
 ## In Progress
 
