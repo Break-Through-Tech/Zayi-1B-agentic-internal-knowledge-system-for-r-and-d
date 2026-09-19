@@ -12,4 +12,10 @@ pandas
 matplotlib
 
 # Testing
-pytest>=8
+pytest>=8pandas
+matplotlib
+jupyter
+ipykernel
+nbformat
+pytesseract
+Pillow
