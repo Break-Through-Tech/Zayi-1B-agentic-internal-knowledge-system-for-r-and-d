@@ -5,17 +5,18 @@ transformers>=4.44  # tokenizer for token-aware chunk sizing (torch not needed u
 # Embeddings & vector store (Task 5)
 sentence-transformers>=3.0
 chromadb>=1.0
+flashrank>=0.2  # local cross-encoder reranking (stretch goal 2)
 
 # Notebooks & analysis (Tasks 2+)
 jupyter
+ipykernel
+nbformat
 pandas
 matplotlib
 
-# Testing
-pytest>=8pandas
-matplotlib
-jupyter
-ipykernel
-nbformat
+# Corrupted-page OCR fixes (notebook 0.5)
 pytesseract
 Pillow
+
+# Testing
+pytest>=8

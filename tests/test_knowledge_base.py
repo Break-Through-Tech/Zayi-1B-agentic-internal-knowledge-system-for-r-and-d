@@ -82,6 +82,38 @@ def test_rebuild_is_idempotent(chunks, client):
     assert collection.count() == len(chunks)
 
 
+def test_search_rejects_mismatched_embedding_model(chunks, client):
+    collection = build_knowledge_base(chunks, client=client)
+    with pytest.raises(ValueError, match="mixed embedding spaces"):
+        search(collection, "anything", model_name="some/other-model")
+
+
+def test_rerank_orders_by_cross_encoder_and_respects_k(chunks, client):
+    collection = build_knowledge_base(chunks, client=client)
+    results = search(collection, "How were medieval castles defended?", k=2, rerank=True)
+    assert len(results) == 2
+    assert results[0]["paper_id"] == "castles"
+    scores = [r["rerank_score"] for r in results]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_evaluate_retrieval_reports_hits_and_misses(chunks, client):
+    from src.retrieval_eval import evaluate_retrieval
+
+    collection = build_knowledge_base(chunks, client=client)
+    examples = [
+        ("How were medieval castles defended?", "castles"),
+        ("How does gradient descent optimize parameters?", "optim"),
+        ("How does gradient descent optimize parameters?", "castles"),  # forced miss
+    ]
+    report = evaluate_retrieval(collection, examples, ks=(1, 2))
+    assert report["n_queries"] == 3
+    assert report["hit@1"] == round(2 / 3, 3)
+    assert report["hit@1"] <= report["hit@2"] <= 1.0
+    assert len(report["misses_at_1"]) == 1
+    assert report["misses_at_1"][0]["expected"] == "castles"
+
+
 def test_metadata_filter(chunks, client):
     collection = build_knowledge_base(chunks, client=client)
     results = search(

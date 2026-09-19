@@ -6,12 +6,26 @@ coexist and be compared by retrieval quality without ever mixing or
 colliding (chunk ids are only unique within a config).
 """
 
+from functools import lru_cache
+
 import chromadb
 
 from src.embedding import DEFAULT_MODEL, embed_query, embed_texts
 
 COLLECTION_PREFIX = "papers"
 _UPSERT_BATCH = 500
+
+# Local cross-encoder for reranking (challenge stretch goal #2): re-scores
+# the top candidates with a model that reads query and passage TOGETHER,
+# which separates near-misses better than embedding distance alone.
+DEFAULT_RERANKER = "ms-marco-MiniLM-L-12-v2"
+
+
+@lru_cache(maxsize=2)
+def _get_ranker(model_name=DEFAULT_RERANKER):
+    from flashrank import Ranker
+
+    return Ranker(model_name=model_name)
 
 
 def collection_name_for(chunks):
@@ -32,7 +46,10 @@ def build_knowledge_base(chunks, client=None, path="chroma", model_name=DEFAULT_
     if client is None:
         client = chromadb.PersistentClient(path=path)
     collection = client.get_or_create_collection(
-        collection_name_for(chunks), metadata={"hnsw:space": "cosine"}
+        collection_name_for(chunks),
+        # the embedding model is recorded so a query can never silently use
+        # a different model than the one that built the vectors
+        metadata={"hnsw:space": "cosine", "embedding_model": model_name},
     )
     embeddings = embed_texts([c["text"] for c in chunks], model_name)
     for i in range(0, len(chunks), _UPSERT_BATCH):
@@ -46,12 +63,23 @@ def build_knowledge_base(chunks, client=None, path="chroma", model_name=DEFAULT_
     return collection
 
 
-def search(collection, query, k=5, model_name=DEFAULT_MODEL, where=None):
+def search(collection, query, k=5, model_name=DEFAULT_MODEL, where=None, rerank=False):
     """Semantic search; returns result dicts with the fields needed for a
-    cited answer: text, similarity, paper id/title, and the page range."""
+    cited answer: text, similarity, paper id/title, and the page range.
+
+    With `rerank=True`, a wider candidate set is fetched and re-scored by a
+    local cross-encoder (FlashRank) before returning the top k — results
+    then carry a `rerank_score` and are ordered by it."""
+    built_with = (collection.metadata or {}).get("embedding_model")
+    if built_with is not None and built_with != model_name:
+        raise ValueError(
+            f"collection was built with {built_with!r} but query uses "
+            f"{model_name!r}; mixed embedding spaces return garbage"
+        )
+    n_candidates = max(k * 4, 16) if rerank else k
     result = collection.query(
         query_embeddings=[embed_query(query, model_name).tolist()],
-        n_results=k,
+        n_results=min(n_candidates, collection.count()),
         where=where,
         include=["documents", "metadatas", "distances"],
     )
@@ -73,4 +101,22 @@ def search(collection, query, k=5, model_name=DEFAULT_MODEL, where=None):
                 "text": text,
             }
         )
+    if rerank:
+        rows = _rerank(query, rows)[:k]
     return rows
+
+
+def _rerank(query, rows, model_name=DEFAULT_RERANKER):
+    from flashrank import RerankRequest
+
+    ranked = _get_ranker(model_name).rerank(
+        RerankRequest(
+            query=query,
+            passages=[{"id": r["chunk_id"], "text": r["text"]} for r in rows],
+        )
+    )
+    by_id = {r["chunk_id"]: r for r in rows}
+    return [
+        dict(by_id[item["id"]], rerank_score=round(float(item["score"]), 4))
+        for item in ranked
+    ]
