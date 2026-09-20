@@ -36,6 +36,7 @@ def evaluate_retrieval(collection, examples, ks=(1, 3), rerank=False):
     page_hits = {k: 0 for k in ks}
     n_page_labeled = 0
     reciprocal_ranks = []
+    page_reciprocal_ranks = []
     details = []
     misses_at_1 = []
 
@@ -63,6 +64,7 @@ def evaluate_retrieval(collection, examples, ks=(1, 3), rerank=False):
                 ),
                 None,
             )
+            page_reciprocal_ranks.append(1.0 / page_rank if page_rank else 0.0)
             for k in ks:
                 if page_rank is not None and page_rank <= k:
                     page_hits[k] += 1
@@ -98,6 +100,7 @@ def evaluate_retrieval(collection, examples, ks=(1, 3), rerank=False):
     if n_page_labeled:
         for k in ks:
             report[f"page_hit@{k}"] = round(page_hits[k] / n_page_labeled, 3)
+        report["page_mrr"] = round(sum(page_reciprocal_ranks) / n_page_labeled, 3)
     report["misses_at_1"] = misses_at_1
     report["details"] = details
     return report

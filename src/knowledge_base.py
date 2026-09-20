@@ -46,6 +46,20 @@ def _corpus_hash(chunks):
     return digest.hexdigest()[:12]
 
 
+def _require_cosine(collection):
+    """`search` scores results as 1 - distance, which is only meaningful in
+    cosine space — and Chroma keeps whatever space a same-named collection
+    was FIRST created with, ignoring later creation metadata. Anything
+    non-cosine is rejected rather than silently mis-scored."""
+    config = getattr(collection, "configuration", None)
+    space = (config.get("hnsw") or {}).get("space") if isinstance(config, dict) else None
+    if space is not None and space != "cosine":
+        raise ValueError(
+            f"collection {collection.name!r} uses {space!r} distance, not "
+            "cosine; delete and rebuild it (similarity scores would be wrong)"
+        )
+
+
 def collection_name_for(chunks):
     """`papers_<config_id>` — refuses a mixed-config chunk list."""
     config_ids = {c["metadata"]["config_id"] for c in chunks}
@@ -76,6 +90,7 @@ def build_knowledge_base(chunks, client=None, path="chroma", model_name=DEFAULT_
     collection = client.get_or_create_collection(
         collection_name_for(chunks), metadata={"hnsw:space": "cosine"}
     )
+    _require_cosine(collection)
     existing = collection.metadata or {}
     existing_model = existing.get("embedding_model")
     if existing_model is not None and existing_model != model_name:
@@ -129,6 +144,7 @@ def search(collection, query, k=5, model_name=DEFAULT_MODEL, where=None, rerank=
     then carry a `rerank_score` and are ordered by it."""
     if k < 1:
         raise ValueError(f"k must be >= 1, got {k}")
+    _require_cosine(collection)
     built_with = (collection.metadata or {}).get("embedding_model")
     if built_with is not None and built_with != model_name:
         raise ValueError(

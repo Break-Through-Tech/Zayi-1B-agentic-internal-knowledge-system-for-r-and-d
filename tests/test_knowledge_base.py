@@ -112,6 +112,20 @@ def test_build_records_provenance_metadata(chunks, client):
     assert build_knowledge_base(chunks, client=client).metadata["corpus_hash"] == meta["corpus_hash"]
 
 
+def test_build_and_search_reject_non_cosine_collection(chunks, client):
+    # regression: a pre-existing same-named collection keeps its original
+    # distance space (chroma ignores creation metadata), so build stamped an
+    # L2 collection and search scored it as if cosine
+    from src.knowledge_base import collection_name_for
+
+    client.create_collection(name=collection_name_for(chunks))  # chroma default: l2
+    with pytest.raises(ValueError, match="not\n?.*cosine|cosine"):
+        build_knowledge_base(chunks, client=client)
+    l2 = client.get_collection(collection_name_for(chunks))
+    with pytest.raises(ValueError, match="cosine"):
+        search(l2, "anything", k=1)
+
+
 def test_build_rejects_empty_chunks(client):
     with pytest.raises(ValueError, match="no chunks"):
         build_knowledge_base([], client=client)
@@ -175,6 +189,7 @@ def test_evaluate_retrieval_page_level(chunks, client):
     assert report["n_page_labeled"] == 2
     # page 1 is where the castle chunks live; page 99 can never hit
     assert report["page_hit@1"] == 0.5
+    assert report["page_mrr"] == 0.5  # ranks: 1 and never -> (1.0 + 0.0) / 2
     assert report["hit@1"] == 1.0  # paper-level all correct
     labeled = [d for d in report["details"] if d["expected_pages"]]
     assert labeled[0]["page_rank"] == 1 and labeled[1]["page_rank"] is None
