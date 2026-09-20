@@ -56,7 +56,7 @@ def main():
             report = evaluate_retrieval(collection, examples, ks=(1, 3), rerank=rerank)
             print(
                 f"{label:<16}{len(chunks):>7}{str(rerank):>8}"
-                f"{report['hit@1']:>8}{report['hit@3']:>8}{report['mrr']:>8}"
+                f"{report['hit@1']:>8}{report['hit@3']:>8}{report['mrr@3']:>8}"
             )
             rows.append(
                 {
@@ -67,7 +67,7 @@ def main():
                     "rerank": rerank,
                     "hit@1": report["hit@1"],
                     "hit@3": report["hit@3"],
-                    "mrr": report["mrr"],
+                    "mrr@3": report["mrr@3"],
                     "misses_at_1": [m["expected"] for m in report["misses_at_1"]],
                     "collection": collection.name,
                     "corpus_hash": collection.metadata["corpus_hash"],

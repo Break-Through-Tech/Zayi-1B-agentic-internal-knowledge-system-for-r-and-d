@@ -11,6 +11,10 @@ Paper-level hit rates are always computed; when an example carries
 when its paper matches AND its cited page range [page_start, page_end]
 contains one of the expected pages. The November ground-truth Q&A pairs are
 page-level, so they plug in as dicts with `expected_pages`.
+
+All metrics are computed over the top max(ks) retrieved results, so MRR is
+reported depth-suffixed (`mrr@<depth>`): a correct result below that depth
+counts as rank-not-found. Raise the largest k to deepen the observation.
 """
 
 from src.knowledge_base import search
@@ -96,11 +100,14 @@ def evaluate_retrieval(collection, examples, ks=(1, 3), rerank=False):
     report = {"n_queries": n, "n_page_labeled": n_page_labeled, "rerank": rerank}
     for k in ks:
         report[f"hit@{k}"] = round(paper_hits[k] / n, 3)  # paper-level
-    report["mrr"] = round(sum(reciprocal_ranks) / n, 3)  # paper-level
+    # depth-suffixed: ranks are only observed within the top max_k results
+    report[f"mrr@{max_k}"] = round(sum(reciprocal_ranks) / n, 3)  # paper-level
     if n_page_labeled:
         for k in ks:
             report[f"page_hit@{k}"] = round(page_hits[k] / n_page_labeled, 3)
-        report["page_mrr"] = round(sum(page_reciprocal_ranks) / n_page_labeled, 3)
+        report[f"page_mrr@{max_k}"] = round(
+            sum(page_reciprocal_ranks) / n_page_labeled, 3
+        )
     report["misses_at_1"] = misses_at_1
     report["details"] = details
     return report

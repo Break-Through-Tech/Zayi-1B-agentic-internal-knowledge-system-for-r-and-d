@@ -179,7 +179,8 @@ def test_evaluate_retrieval_reports_hits_and_misses(chunks, client):
     assert report["hit@1"] <= report["hit@2"] <= 1.0
     assert len(report["misses_at_1"]) == 1
     assert report["misses_at_1"][0]["expected"] == "castles"
-    assert 0.0 <= report["mrr"] <= 1.0
+    assert 0.0 <= report["mrr@2"] <= 1.0  # depth-suffixed: observed to max(ks)
+    assert "mrr" not in report  # unqualified name would overstate the metric
     assert "page_hit@1" not in report  # no page labels given
     assert len(report["details"]) == 3
 
@@ -197,7 +198,7 @@ def test_evaluate_retrieval_page_level(chunks, client):
     assert report["n_page_labeled"] == 2
     # page 1 is where the castle chunks live; page 99 can never hit
     assert report["page_hit@1"] == 0.5
-    assert report["page_mrr"] == 0.5  # ranks: 1 and never -> (1.0 + 0.0) / 2
+    assert report["page_mrr@1"] == 0.5  # ranks: 1 and never -> (1.0 + 0.0) / 2
     assert report["hit@1"] == 1.0  # paper-level all correct
     labeled = [d for d in report["details"] if d["expected_pages"]]
     assert labeled[0]["page_rank"] == 1 and labeled[1]["page_rank"] is None
