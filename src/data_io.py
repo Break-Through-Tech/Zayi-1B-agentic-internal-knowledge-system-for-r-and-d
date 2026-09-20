@@ -11,7 +11,7 @@ from pathlib import Path
 # (original + OCR-repaired figure pages, same schema — see notebook 0.5) is
 # preferred when present; the untouched original is the fallback.
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-_CORRECTED = _DATA_DIR / "curated_papers_text_corrected_corrected.json"
+_CORRECTED = _DATA_DIR / "curated_papers_text_corrected.json"
 _ORIGINAL = _DATA_DIR / "curated_papers_text.json"
 DEFAULT_DATA_PATH = _CORRECTED if _CORRECTED.exists() else _ORIGINAL
 

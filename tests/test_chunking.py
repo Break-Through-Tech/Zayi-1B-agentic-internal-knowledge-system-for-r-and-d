@@ -190,10 +190,14 @@ def test_stats_shape(one_paper_pages):
 
 def test_default_data_prefers_ocr_corrected_source():
     # the corrected file (OCR-fixed ReAct figure pages) must be picked up
-    # when present, so the fixes actually reach the chunks
-    from src.data_io import DEFAULT_DATA_PATH, load_pages
+    # when present, so the fixes actually reach the chunks. This asserts
+    # unconditionally: a typo'd path that silently falls back to the
+    # uncorrected original has already happened once.
+    from src.data_io import _CORRECTED, DEFAULT_DATA_PATH, load_pages
 
-    if DEFAULT_DATA_PATH.name == "curated_papers_text_corrected.json":
+    assert DEFAULT_DATA_PATH.exists()
+    if _CORRECTED.exists():
+        assert DEFAULT_DATA_PATH == _CORRECTED
         react_p2 = next(
             p for p in load_pages()
             if p["paper_id"] == "2210.03629" and p["page_number"] == 2
