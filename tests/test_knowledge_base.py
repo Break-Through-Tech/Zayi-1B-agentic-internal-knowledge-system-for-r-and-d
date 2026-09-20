@@ -118,10 +118,16 @@ def test_build_and_search_reject_non_cosine_collection(chunks, client):
     # L2 collection and search scored it as if cosine
     from src.knowledge_base import collection_name_for
 
-    client.create_collection(name=collection_name_for(chunks))  # chroma default: l2
-    with pytest.raises(ValueError, match="not\n?.*cosine|cosine"):
-        build_knowledge_base(chunks, client=client)
-    l2 = client.get_collection(collection_name_for(chunks))
+    # EphemeralClient instances share one in-process store, so use a config
+    # no other test builds to get a collection name that's genuinely new
+    unique = build_chunks(
+        [_page("castles", 1, "castle walls and moats sentence.\n" * 20)],
+        ChunkingConfig(chunk_size=192, chunk_overlap=0),
+    )
+    client.create_collection(name=collection_name_for(unique))  # chroma default: l2
+    with pytest.raises(ValueError, match="cosine"):
+        build_knowledge_base(unique, client=client)
+    l2 = client.get_collection(collection_name_for(unique))
     with pytest.raises(ValueError, match="cosine"):
         search(l2, "anything", k=1)
 
@@ -137,7 +143,9 @@ def test_empty_results_and_bad_k_are_handled(chunks, client):
     assert search(collection, "anything", k=2, where={"paper_id": "nope"}, rerank=True) == []
     with pytest.raises(ValueError, match="k must be"):
         search(collection, "anything", k=0)
-    empty = client.get_or_create_collection("empty_test")
+    empty = client.get_or_create_collection(
+        "empty_test", metadata={"hnsw:space": "cosine"}
+    )
     assert search(empty, "anything", k=3) == []
 
 
