@@ -1,0 +1,22 @@
+[
+  {"query": "What is the difference between RAG-Sequence and RAG-Token generation?", "expected_paper_id": "2005.11401"},
+  {"query": "How does combining a parametric seq2seq model with a non-parametric dense index improve knowledge-intensive tasks?", "expected_paper_id": "2005.11401"},
+  {"query": "What distinguishes naive, advanced, and modular RAG paradigms?", "expected_paper_id": "2312.10997"},
+  {"query": "What are the main components surveyed across retrieval, generation, and augmentation techniques in RAG systems?", "expected_paper_id": "2312.10997"},
+  {"query": "What are reflection tokens and how do critique tokens grade a model's own generations?", "expected_paper_id": "2310.11511"},
+  {"query": "How can a language model adaptively decide whether retrieval is needed during generation?", "expected_paper_id": "2310.11511"},
+  {"query": "How does a retrieval evaluator trigger corrective actions such as falling back to web search?", "expected_paper_id": "2401.15884"},
+  {"query": "What is the decompose-then-recompose algorithm for refining retrieved documents?", "expected_paper_id": "2401.15884"},
+  {"query": "How does interleaving reasoning traces with task-specific actions improve performance on HotpotQA?", "expected_paper_id": "2210.03629"},
+  {"query": "How does an agent use thought, action, and observation steps with a Wikipedia API?", "expected_paper_id": "2210.03629"},
+  {"query": "How does answer accuracy change when the relevant document sits in the middle of a long context?", "expected_paper_id": "2307.03172"},
+  {"query": "What does the U-shaped performance curve reveal about how language models use their context window?", "expected_paper_id": "2307.03172"},
+  {"query": "Which metrics evaluate faithfulness, answer relevance, and context relevance without human annotations?", "expected_paper_id": "2309.15217"},
+  {"query": "How can a RAG pipeline be evaluated reference-free using an automated framework?", "expected_paper_id": "2309.15217"},
+  {"query": "Why does low-rank adaptation introduce no additional inference latency compared to adapter layers?", "expected_paper_id": "2106.09685"},
+  {"query": "What rank is sufficient when adapting the attention weight matrices of GPT-3?", "expected_paper_id": "2106.09685"},
+  {"query": "How do tiling and recomputation reduce memory traffic between GPU SRAM and HBM in attention?", "expected_paper_id": "2205.14135"},
+  {"query": "What is an IO-aware exact attention algorithm and how does its block-sparse variant scale to long sequences?", "expected_paper_id": "2205.14135"},
+  {"query": "How are dense passage representations trained using in-batch negatives?", "expected_paper_id": "2004.04906"},
+  {"query": "Can a dense retriever trained on question-passage pairs outperform BM25 for open-domain question answering?", "expected_paper_id": "2004.04906"}
+]

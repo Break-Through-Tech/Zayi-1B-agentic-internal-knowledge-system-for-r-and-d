@@ -7,8 +7,13 @@ depend on the raw JSON layout.
 import json
 from pathlib import Path
 
-# Path works from repo root and from notebooks/
-DEFAULT_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "curated_papers_text.json"
+# Path works from repo root and from notebooks/. The `_corrected` variant
+# (original + OCR-repaired figure pages, same schema — see notebook 0.5) is
+# preferred when present; the untouched original is the fallback.
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+_CORRECTED = _DATA_DIR / "curated_papers_text_corrected.json"
+_ORIGINAL = _DATA_DIR / "curated_papers_text.json"
+DEFAULT_DATA_PATH = _CORRECTED if _CORRECTED.exists() else _ORIGINAL
 
 
 def load_papers(path=DEFAULT_DATA_PATH):

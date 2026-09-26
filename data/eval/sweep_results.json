@@ -1,0 +1,194 @@
+{
+  "date": "2026-09-20",
+  "source_file": "curated_papers_text_corrected.json",
+  "queries_file": "eval_queries_sample.json",
+  "n_queries": 20,
+  "note": "paper-level labels only; page-level metrics await the official ground-truth set",
+  "results": [
+    {
+      "scope": "page",
+      "chunk_size": 256,
+      "chunk_overlap": 32,
+      "n_chunks": 1022,
+      "rerank": false,
+      "hit@1": 0.95,
+      "hit@3": 1.0,
+      "mrr@3": 0.975,
+      "misses_at_1": [
+        "2310.11511"
+      ],
+      "collection": "papers_0e4a7cb6",
+      "corpus_hash": "e62e3e2b116d"
+    },
+    {
+      "scope": "page",
+      "chunk_size": 256,
+      "chunk_overlap": 32,
+      "n_chunks": 1022,
+      "rerank": true,
+      "hit@1": 0.95,
+      "hit@3": 0.95,
+      "mrr@3": 0.95,
+      "misses_at_1": [
+        "2310.11511"
+      ],
+      "collection": "papers_0e4a7cb6",
+      "corpus_hash": "e62e3e2b116d"
+    },
+    {
+      "scope": "page",
+      "chunk_size": 384,
+      "chunk_overlap": 48,
+      "n_chunks": 693,
+      "rerank": false,
+      "hit@1": 0.9,
+      "hit@3": 0.95,
+      "mrr@3": 0.925,
+      "misses_at_1": [
+        "2310.11511",
+        "2309.15217"
+      ],
+      "collection": "papers_3981d744",
+      "corpus_hash": "514d8cfd26dc"
+    },
+    {
+      "scope": "page",
+      "chunk_size": 384,
+      "chunk_overlap": 48,
+      "n_chunks": 693,
+      "rerank": true,
+      "hit@1": 0.95,
+      "hit@3": 1.0,
+      "mrr@3": 0.975,
+      "misses_at_1": [
+        "2310.11511"
+      ],
+      "collection": "papers_3981d744",
+      "corpus_hash": "514d8cfd26dc"
+    },
+    {
+      "scope": "page",
+      "chunk_size": 512,
+      "chunk_overlap": 64,
+      "n_chunks": 553,
+      "rerank": false,
+      "hit@1": 0.85,
+      "hit@3": 0.95,
+      "mrr@3": 0.9,
+      "misses_at_1": [
+        "2312.10997",
+        "2310.11511",
+        "2309.15217"
+      ],
+      "collection": "papers_dcd1d776",
+      "corpus_hash": "6f2bdd81ce41"
+    },
+    {
+      "scope": "page",
+      "chunk_size": 512,
+      "chunk_overlap": 64,
+      "n_chunks": 553,
+      "rerank": true,
+      "hit@1": 0.95,
+      "hit@3": 1.0,
+      "mrr@3": 0.967,
+      "misses_at_1": [
+        "2310.11511"
+      ],
+      "collection": "papers_dcd1d776",
+      "corpus_hash": "6f2bdd81ce41"
+    },
+    {
+      "scope": "page",
+      "chunk_size": 512,
+      "chunk_overlap": 0,
+      "n_chunks": 517,
+      "rerank": false,
+      "hit@1": 0.9,
+      "hit@3": 0.95,
+      "mrr@3": 0.917,
+      "misses_at_1": [
+        "2310.11511",
+        "2309.15217"
+      ],
+      "collection": "papers_e0e3b4f1",
+      "corpus_hash": "d8b1c3978047"
+    },
+    {
+      "scope": "page",
+      "chunk_size": 512,
+      "chunk_overlap": 0,
+      "n_chunks": 517,
+      "rerank": true,
+      "hit@1": 0.95,
+      "hit@3": 0.95,
+      "mrr@3": 0.95,
+      "misses_at_1": [
+        "2310.11511"
+      ],
+      "collection": "papers_e0e3b4f1",
+      "corpus_hash": "d8b1c3978047"
+    },
+    {
+      "scope": "paper",
+      "chunk_size": 512,
+      "chunk_overlap": 64,
+      "n_chunks": 467,
+      "rerank": false,
+      "hit@1": 0.9,
+      "hit@3": 0.95,
+      "mrr@3": 0.917,
+      "misses_at_1": [
+        "2310.11511",
+        "2309.15217"
+      ],
+      "collection": "papers_6122f527",
+      "corpus_hash": "b8ab31b5f755"
+    },
+    {
+      "scope": "paper",
+      "chunk_size": 512,
+      "chunk_overlap": 64,
+      "n_chunks": 467,
+      "rerank": true,
+      "hit@1": 0.95,
+      "hit@3": 0.95,
+      "mrr@3": 0.95,
+      "misses_at_1": [
+        "2310.11511"
+      ],
+      "collection": "papers_6122f527",
+      "corpus_hash": "b8ab31b5f755"
+    },
+    {
+      "scope": "paper",
+      "chunk_size": 384,
+      "chunk_overlap": 48,
+      "n_chunks": 620,
+      "rerank": false,
+      "hit@1": 0.95,
+      "hit@3": 1.0,
+      "mrr@3": 0.975,
+      "misses_at_1": [
+        "2310.11511"
+      ],
+      "collection": "papers_5d5e55d2",
+      "corpus_hash": "f52bde731b44"
+    },
+    {
+      "scope": "paper",
+      "chunk_size": 384,
+      "chunk_overlap": 48,
+      "n_chunks": 620,
+      "rerank": true,
+      "hit@1": 0.95,
+      "hit@3": 1.0,
+      "mrr@3": 0.975,
+      "misses_at_1": [
+        "2310.11511"
+      ],
+      "collection": "papers_5d5e55d2",
+      "corpus_hash": "f52bde731b44"
+    }
+  ]
+}
