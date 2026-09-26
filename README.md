@@ -8,7 +8,7 @@
 | MatthewZ1 | @MatthewZ1 | Corrected corrupted figure text, fixed ReAct paper OCR issues, updated data-source handling, and contributed to the corrected dataset workflow |
 | BrantisIsHacking | @BrantisIsHacking | Text cleaning notebook work, chunking notebook updates, progress tracker additions, and testing support |
 | Tharun Malla Dinakaran | @TharunMallaDinakaran | Data preprocessing and exploratory analysis notebook work for the research paper dataset |
-| atai20 | @atai20 | Findings formatting, markdown cleanup, notebook updates, and research-paper analysis documentation |
+| Atai Kydyrov | @atai20 | Findings formatting, markdown cleanup, notebook updates, and research-paper analysis documentation |
 | joseambrosioo | @joseambrosioo | Challenge project overview updates and project coordination documentation |
 | hari-bttai | @hari-bttai | Initial repository commit and project scaffolding |
 
