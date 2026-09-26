@@ -6,7 +6,7 @@
 |---|---|---|
 | Ranidnu-W | @Ranidnu-W | Core project implementation, token-aware chunking, embeddings, ChromaDB knowledge base, retrieval evaluation, collection lifecycle fixes, reranking work, and repo-level maintenance |
 | MatthewZ1 | @MatthewZ1 | Corrected corrupted figure text, fixed ReAct paper OCR issues, updated data-source handling, and contributed to the corrected dataset workflow |
-| BrantisIsHacking | @BrantisIsHacking | Text cleaning notebook work, chunking notebook updates, progress tracker additions, and testing support |
+| Brayden Uglione | @BrantisIsHacking | Text cleaning notebook work, chunking notebook updates, progress tracker additions, and testing support |
 | Tharun Kumar Malla Dinakaran | @Thxrunn | Developed EDA and text preprocessing notebooks to analyze, clean, validate, and prepare the research paper dataset for the RAG pipeline. |
 | Atai Kydyrov | @atai20 | Findings formatting, markdown cleanup, notebook updates, and research-paper analysis documentation |
 | joseambrosioo | @joseambrosioo | Challenge project overview updates and project coordination documentation |
