@@ -1,121 +1,332 @@
-# AI Studio Challenge Project Title
+# Agentic Internal Knowledge System for R&D
 
-> 💡 **Note for the team:** This is just a template. Update the above title with your AI Studio Challenge Project name. Remove all guidance notes and example text in this template and populate this README with your own content. You can work on this README throughout AI Studio, and get feedback from your AI Studio Coach and Challenge Advisor before finalizing it.  
+### 👥 Team Members
 
----
-
-### 👥 **Team Members**
-
-**Example:**
-
-| Name             | GitHub Handle | Contribution                                                             |
-|------------------|---------------|--------------------------------------------------------------------------|
-| Taylor Nguyen    | @taylornguyen | Data exploration, visualization, overall project coordination            |
-| Jordan Ramirez   | @jramirez     | Data collection, exploratory data analysis (EDA), dataset documentation  |
-| Amina Hassan     | @aminahassan  | Data preprocessing, feature engineering, data validation                 |
-| Priya Mehta      | @pmehta       | Model selection, hyperparameter tuning, model training and optimization  |
-| Chris Park       | @chrispark    | Model evaluation, performance analysis, results interpretation           |
+| Name | GitHub Handle | Contribution |
+|---|---|---|
+| Ranidnu-W | @Ranidnu-W | Core project implementation, token-aware chunking, embeddings, ChromaDB knowledge base, retrieval evaluation, collection lifecycle fixes, reranking work, and repo-level maintenance |
+| MatthewZ1 | @MatthewZ1 | Corrected corrupted figure text, fixed ReAct paper OCR issues, updated data-source handling, and contributed to the corrected dataset workflow |
+| BrantisIsHacking | @BrantisIsHacking | Text cleaning notebook work, chunking notebook updates, progress tracker additions, and testing support |
+| Tharun Malla Dinakaran | @TharunMallaDinakaran | Data preprocessing and exploratory analysis notebook work for the research paper dataset |
+| atai20 | @atai20 | Findings formatting, markdown cleanup, notebook updates, and research-paper analysis documentation |
+| joseambrosioo | @joseambrosioo | Challenge project overview updates and project coordination documentation |
+| hari-bttai | @hari-bttai | Initial repository commit and project scaffolding |
 
 ---
 
-## 🎯 **Project Highlights**
+## 🎯 Project Highlights
 
-**Example:**
-
-- Developed a machine learning model using `[model type/technique]` to address `[challenge project task]`.
-- Achieved `[key metric or result]`, demonstrating `[value or impact]` for `[host company]`.
-- Generated actionable insights to inform business decisions at `[host company or stakeholders]`.
-- Implemented `[specific methodology]` to address industry constraints or expectations.
-
----
-
-## 👩🏽‍💻 **Setup and Installation**
-
-**Provide step-by-step instructions so someone else can run your code and reproduce your results. Depending on your setup, include:**
-
-* How to clone the repository
-* How to install dependencies
-* How to set up the environment
-* How to access the dataset(s)
-* How to run the notebook or scripts
+- Built a local retrieval-first research assistant for Zayi’s R&D workflow using a curated set of ArXiv ML papers.
+- Created a reproducible pipeline for cleaning paper text, chunking documents with token-aware sizing, embedding them, and storing them in ChromaDB.
+- Implemented evaluation logic for retrieval performance using hit@k and MRR so that chunking strategies can be compared systematically.
+- Added optional local reranking support via FlashRank to improve result relevance in the knowledge base.
+- Organized the project around modular code, notebooks, dataset assets, tests, and an evaluation sweep script tied to the milestone workflow.
 
 ---
 
-## 🏗️ **Project Overview**
+A local retrieval-first research assistant for Zayi’s R&D workflow. This repository turns a curated set of ArXiv ML papers into a searchable knowledge base using cleaned text, token-aware chunking, embeddings, and ChromaDB. The system is designed to support document retrieval, citation-grounded answers, and future agentic workflows built on top of the same retrieval layer.
 
-**Describe:**
+## Project context
 
-- How this project is connected to the Break Through Tech AI Program
-- Your AI Studio host company and the project objective and scope
-- The real-world significance of the problem and the potential impact of your work
+- Host organization: Zayi
+- Challenge advisor: Jose Ambrosio
+- Program: Break Through Tech AI Studio - Fall 2026
+- Goal: build an internal knowledge system that lets engineers quickly query dense research papers, find the right passages and page ranges, and draft structured technical memos with citations.
 
----
+This project follows the repository’s milestone structure:
 
-## 📊 **Data Exploration**
+- Task 1: environment setup and dataset review
+- Task 2: exploratory data analysis
+- Task 3: cleaning and preprocessing
+- Task 4: text chunking
+- Task 5: embeddings and ChromaDB knowledge base
 
-**You might consider describing the following (as applicable):**
+## What is implemented
 
-* The dataset(s) used: origin, format, size, type of data
-* Data exploration and preprocessing approaches
-* Insights from your Exploratory Data Analysis (EDA)
-* Challenges and assumptions when working with the dataset(s)
+The current codebase contains the actual retrieval stack used for experimentation:
 
-**Potential visualizations to include:**
+- Data loading and normalization from curated ArXiv paper JSON files
+- Text cleaning and preprocessing utilities
+- Token-aware chunking using the embedding model tokenizer instead of raw word counts
+- BAAI/bge-small-en-v1.5 embeddings for both document and query passages
+- ChromaDB collection creation with per-config storage and provenance metadata
+- Retrieval evaluation with hit@k and MRR metrics
+- Optional local reranking through FlashRank
+- Sweep script to benchmark multiple chunking configurations
 
-* Plots, charts, heatmaps, feature visualizations, sample dataset images
+## Repository structure
 
----
+```text
+.
+├── README.md
+├── requirements.txt
+├── Challenge-Project-Overview.md
+├── Progress.md
+├── FindingsOnResearchPapers.md
+├── Getting-Started-for-Fellows.md
+├── data/
+│   ├── curated_papers_text.json
+│   ├── curated_papers_text_corrected.json
+│   ├── cleaned_papers_text.json
+│   ├── eval_queries_sample.json
+│   ├── eval/
+│   │   └── sweep_results.json
+│   ├── images/
+│   └── processed/
+│       └── cleaned_papers.json
+├── notebooks/
+│   ├── 0.5_corrupted_text_fix.ipynb
+│   ├── 01_data_exploration.ipynb
+│   ├── 02_text_preprocessing.ipynb
+│   ├── 03_text_chunking.ipynb
+│   └── 04_knowledge_base.ipynb
+├── scripts/
+│   └── run_retrieval_sweep.py
+├── src/
+│   ├── __init__.py
+│   ├── chunking.py
+│   ├── cleaning.py
+│   ├── data_io.py
+│   ├── embedding.py
+│   ├── knowledge_base.py
+│   └── retrieval_eval.py
+├── tests/
+│   ├── test_chunking.py
+│   ├── test_cleaning.py
+│   └── test_knowledge_base.py
+└── chroma/            # local vector store, generated at runtime
+```
 
-## 🧠 **Model Development**
+## Data and source materials
 
-**You might consider describing the following (as applicable):**
+The project ingests a curated subset of ML research papers from ArXiv. The data is stored locally in the repository under `data/`.
 
-* Model(s) used (e.g., CNN with transfer learning, regression models)
-* Feature selection and Hyperparameter tuning strategies
-* Training setup (e.g., % of data for training/validation, evaluation metric, baseline performance)
+Primary dataset files:
 
+- `data/curated_papers_text.json`: original paper JSON
+- `data/curated_papers_text_corrected.json`: corrected version preferred when present
+- `data/cleaned_papers_text.json`: cleaned per-page output from Task 3
+- `data/processed/cleaned_papers.json`: flat cleaned records used by pipeline adapters
+- `data/eval_queries_sample.json`: sample labeled retrieval questions used for evaluation
 
----
+The loader in `src/data_io.py` prefers the corrected dataset automatically:
 
-## 📈 **Results & Key Findings**
+- `DEFAULT_DATA_PATH` = `data/curated_papers_text_corrected.json` if it exists
+- otherwise it falls back to `data/curated_papers_text.json`
 
-**You might consider describing the following (as applicable):**
+## Environment setup
 
-* Performance metrics (e.g., Accuracy, F1 score, RMSE)
-* How your model performed
-* Insights from evaluating model fairness
+From the repository root:
 
-**Potential visualizations to include:**
+```bash
+cd /workspaces/Zayi-1B-agentic-internal-knowledge-system-for-r-and-d
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-* Confusion matrix, precision-recall curve, feature importance plot, prediction distribution, outputs from fairness or explainability tools
+If you want Python imports from the project package to resolve in local runs and tests, set the project root on `PYTHONPATH`:
 
----
+```bash
+export PYTHONPATH="$PWD"
+```
 
-## 🚀 **Next Steps**
+Optional but useful for notebooks:
 
-**You might consider addressing the following (as applicable):**
+```bash
+python -m ipykernel install --user --name zayi-rag
+```
 
-* What are some of the limitations of your model?
-* What would you do differently with more time/resources?
-* What additional datasets or techniques would you explore?
+## Installation notes
 
----
+The project currently depends on:
 
-## 📝 **License**
+- `langchain-text-splitters`
+- `transformers`
+- `sentence-transformers`
+- `chromadb`
+- `flashrank`
+- `pandas`, `matplotlib`, `jupyter`, `ipykernel`
+- `pytesseract`, `Pillow`
+- `pytest`
 
-Specify how your project can be used by others. Choose an appropriate license and link it here (e.g., MIT, Apache 2.0). Make sure your Challenge Advisor approves of the selected license type. 
+The locked dependency set is maintained in `requirements.txt`.
 
-**Example:**
-This project is licensed under the MIT License.
+## Project workflow
 
----
+### 1. Load and inspect the data
 
-## 📄 **References** (Optional but encouraged)
+The loader module normalizes raw paper data into flat page records:
 
-Cite relevant papers, articles, or resources that supported your project.
+```python
+from src.data_io import load_pages
+pages = load_pages()
+print(len(pages))
+```
 
----
+This is used across the notebooks and downstream chunking pipeline.
 
-## 🙏 **Acknowledgements** (Optional but encouraged)
+### 2. Clean the text
 
-Thank your Challenge Advisor, host company representatives, TA, and others who supported your project.
+The cleaning pipeline handles textual artifacts such as ligature cleanup, broken formatting, and noisy OCR-like patterns, then passes cleaned records to the chunker.
+
+Relevant files:
+
+- `src/cleaning.py`
+- `notebooks/02_text_preprocessing.ipynb`
+
+### 3. Chunk the documents
+
+The chunking implementation in `src/chunking.py` uses the tokenizer from the embedding model to measure tokens and keep chunks within the model limit.
+
+Key design details:
+
+- `ChunkingConfig(chunk_size, chunk_overlap, tokenizer_name, scope)`
+- default tokenizer: `BAAI/bge-small-en-v1.5`
+- supported scopes:
+  - `page`: chunk stays within a single page
+  - `paper`: chunk may span page boundaries while tracking page ranges
+- each chunk carries metadata including page numbers and config fingerprint
+
+Example:
+
+```python
+from src.chunking import ChunkingConfig, build_chunks
+from src.data_io import load_pages
+from src.cleaning import clean_pages
+
+cleaned = clean_pages(load_pages())
+chunks = build_chunks(cleaned, ChunkingConfig(chunk_size=256, chunk_overlap=32, scope="page"))
+print(len(chunks))
+```
+
+### 4. Build the knowledge base
+
+The vector store is created with ChromaDB in `src/knowledge_base.py`.
+
+Configuration highlights:
+
+- one Chroma collection per chunking configuration
+- embeddings use `BAAI/bge-small-en-v1.5`
+- collection metadata stores model name, corpus hash, and config info
+- existing collections are checked to prevent silent cross-model corruption
+- stale entries are removed when a collection is rebuilt
+
+Example:
+
+```python
+from src.data_io import load_pages
+from src.cleaning import clean_pages
+from src.chunking import ChunkingConfig, build_chunks
+from src.knowledge_base import build_knowledge_base
+
+pages = clean_pages(load_pages())
+chunks = build_chunks(pages, ChunkingConfig(chunk_size=256, chunk_overlap=32, scope="page"))
+collection = build_knowledge_base(chunks)
+print(collection.name)
+```
+
+### 5. Query the knowledge base
+
+Search is exposed through `src/knowledge_base.py`:
+
+```python
+from src.knowledge_base import search
+
+results = search(collection, "What is the role of retrieval in RAG?", k=5, rerank=True)
+for r in results:
+    print(r["paper_title"], r["page_start"], r["page_end"], r["similarity"])
+```
+
+This supports:
+
+- semantic retrieval over embedded chunks
+- optional reranking with FlashRank
+- citation-friendly result metadata such as page numbers and paper title
+
+### 6. Run the evaluation sweep
+
+The script `scripts/run_retrieval_sweep.py` builds several chunking configurations, evaluates retrieval against the sample labeled query set, prints a summary table, and saves results to `data/eval/sweep_results.json`.
+
+From the repo root:
+
+```bash
+python scripts/run_retrieval_sweep.py
+```
+
+The sweep compares different chunk sizes, overlaps, and page-vs-paper scope, and also tests reranking on and off.
+
+## Notebooks
+
+The notebook flow is:
+
+- `notebooks/0.5_corrupted_text_fix.ipynb`: OCR/corruption repair work on the raw text
+- `notebooks/01_data_exploration.ipynb`: dataset inspection and EDA
+- `notebooks/02_text_preprocessing.ipynb`: cleaning and normalization
+- `notebooks/03_text_chunking.ipynb`: chunking experiments and stats
+- `notebooks/04_knowledge_base.ipynb`: embedding, ChromaDB indexing, and sample searches
+
+## Testing
+
+The repository includes a small local test suite for cleaning, chunking, and knowledge-base behavior.
+
+Run tests from the repo root with:
+
+```bash
+export PYTHONPATH="$PWD"
+pytest -q
+```
+
+This is the recommended invocation for the current repository layout because the project package lives under `src/`.
+
+## Current project status
+
+The repository is currently positioned as a working retrieval prototype for the AI Studio milestone flow:
+
+- data and preprocessing pipeline are in place
+- token-aware chunking is implemented and validated
+- a ChromaDB knowledge base is built per config
+- retrieval quality is measured with a deterministic eval script
+- optional reranking and future RAG orchestration are supported by the architecture
+
+The project’s current notes indicate that the team is still deciding on the canonical cleaned dataset and preparing for the official ground-truth Q&A evaluation set planned for the next milestone phase.
+
+## Stretch goals and next milestones
+
+The repository document set references the following directions:
+
+1. Agentic self-correction with LangGraph
+2. Local reranking with FlashRank
+3. Deterministic evaluation using rule-based metrics
+4. Browser UI prototyping with Gradio
+
+The next milestone direction is to layer a baseline RAG pipeline on top of the working knowledge-base search layer, using Gemini or similar LLM APIs for final answer generation.
+
+## License
+
+This project repository does not currently contain a project-specific license file. Before public distribution, confirm the appropriate license with the challenge advisor and add the corresponding file if needed.
+
+## References
+
+Useful project references include:
+
+- Retrieval-Augmented Generation for Large Language Models: A Survey
+- Dense Passage Retrieval for Open-Domain Question Answering
+- Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection
+- FlashAttention
+- LoRA
+- RAGAS
+- ChromaDB documentation
+- LangChain RAG documentation
+
+## Notes
+
+The implementation is deliberately built for local experimentation and reproducibility. It emphasizes:
+
+- deterministic chunk configuration
+- clean provenance tracking of chunk metadata
+- embedding-model-aware tokenizer sizing
+- local evaluation before adding heavier API-driven generation layers
+
+This keeps the retrieval pipeline testable, auditable, and easy to compare across multiple chunking strategies.
