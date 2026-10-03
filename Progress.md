@@ -89,4 +89,13 @@ Tasks 1–4 completed. Task 5 initial implementation done. Remaining for the mil
 - Chunk-config sweep (rerun 2026-09-20 from a clean store via `scripts/run_retrieval_sweep.py`; results in `data/eval/sweep_results.json`): all 6 configs score paper hit@1 0.85–0.95 and hit@3 0.95–1.0 — differences are 1–2 queries, i.e. within noise at this sample size. Two consistent signals: FlashRank reranking lifted or matched hit@1 in every config (weakest 0.85 → 0.95), and smaller chunks (256–384) edge out 512 without rerank. Decision: keep the current default until the official ground-truth Q&A set arrives, then re-run this sweep (with page labels) for the final call; use `rerank=True` in the October generator, ideally over a 256–384-token collection given the reranker's 512-token pair limit.
 
 - Reference-heavy pages may introduce noise into semantic retrieval.
+
+  **Update — reference-page filtering tested:** Built scripts/test_reference_filtering.py to evaluate whether removing bibliography/reference sections improves retrieval quality. The script detects the start of each paper's References/Bibliography section via heading match, removes all subsequent pages, rebuilds the ChromaDB index, and compares retrieval metrics against the unfiltered corpus.
+
+  Result: removing reference pages reduced the indexed corpus from 553 chunks to 257 chunks (~54% reduction) but produced no change in hit@1 (0.850), hit@3 (0.950), or mrr@3 (0.900) on the sample evaluation set.
+
+  Decision: do not adopt reference-page filtering at this time. The experiment found no measurable retrieval benefit on the current query set, so the added preprocessing complexity is not justified.
+
+  Caveat: results are based on the current ~20-query evaluation set and should be revalidated when the larger ground-truth Q&A dataset becomes available
+
 - Word counts and model token counts diverge significantly on this corpus: measured with the bge-small tokenizer, ~62% of the 400-word chunks exceed 512 tokens (max ~1,979). Embedding models silently truncate input past their limit (`all-MiniLM-L6-v2` at 256 tokens, `bge-small-en-v1.5` at 512), so over-length chunks are only partially represented by their embeddings. Sizing chunks in tokens (with the same tokenizer as the embedding model) avoids this.
