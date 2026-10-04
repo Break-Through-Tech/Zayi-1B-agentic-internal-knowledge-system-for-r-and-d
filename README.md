@@ -9,6 +9,7 @@
 | Brayden Uglione | @BrantisIsHacking | Updated text-cleaning and chunking notebooks, consolidated data-cleaning files, supported testing, and developed task delegation and progress tracking |
 | Tharun Kumar Malla Dinakaran | @Thxrunn | Developed EDA and text preprocessing notebooks to analyze, clean, validate, and prepare the research paper dataset for the RAG pipeline. |
 | Atai Kydyrov | @atai20 | Findings formatting, markdown cleanup, notebook updates, and research-paper analysis documentation |
+| Claire Moon | @cmoon07 | Tested reference-page filtering against the retrieval eval set |
 | joseambrosioo | @joseambrosioo | Challenge project overview updates and project coordination documentation |
 | hari-bttai | @hari-bttai | Initial repository commit and project scaffolding |
 
@@ -81,7 +82,8 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   ├── 03_text_chunking.ipynb
 │   └── 04_knowledge_base.ipynb
 ├── scripts/
-│   └── run_retrieval_sweep.py
+│   ├── run_retrieval_sweep.py
+│   └── test_reference_filtering.py
 ├── src/
 │   ├── __init__.py
 │   ├── chunking.py
