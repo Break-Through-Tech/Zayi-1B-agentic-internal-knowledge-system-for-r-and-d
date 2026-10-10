@@ -7,6 +7,8 @@ colliding (chunk ids are only unique within a config).
 """
 
 import hashlib
+import json
+import threading
 from functools import lru_cache
 
 import chromadb
@@ -27,8 +29,16 @@ DEFAULT_RERANKER = "ms-marco-MiniLM-L-12-v2"
 _RERANKER_MAX_LENGTH = 512  # the cross-encoder's hard limit
 
 
-@lru_cache(maxsize=2)
+_ranker_lock = threading.Lock()
+
+
 def _get_ranker(model_name=DEFAULT_RERANKER):
+    with _ranker_lock:  # see embedding.get_model: one load under concurrency
+        return _load_ranker(model_name)
+
+
+@lru_cache(maxsize=2)
+def _load_ranker(model_name):
     from flashrank import Ranker
 
     return Ranker(model_name=model_name, max_length=_RERANKER_MAX_LENGTH)
@@ -43,6 +53,17 @@ def _corpus_hash(chunks):
         digest.update(b"\x00")
         digest.update(chunk["text"].encode())
         digest.update(b"\x01")
+    return digest.hexdigest()[:12]
+
+
+def _metadata_hash(chunks):
+    """Identity of the chunk metadata (titles, pages, ...). Kept separate
+    from `_corpus_hash` so recorded corpus hashes (e.g. in sweep results)
+    keep their meaning; together they detect metadata-only data fixes."""
+    digest = hashlib.sha1()
+    for chunk in chunks:
+        digest.update(chunk["chunk_id"].encode())
+        digest.update(json.dumps(chunk["metadata"], sort_keys=True).encode())
     return digest.hexdigest()[:12]
 
 
@@ -69,6 +90,20 @@ def collection_name_for(chunks):
             "build one collection per config"
         )
     return f"{COLLECTION_PREFIX}_{config_ids.pop()}"
+
+
+def is_up_to_date(collection, chunks, model_name=DEFAULT_MODEL):
+    """True when `collection` already holds exactly these chunks (ids, texts
+    and metadata), embedded with `model_name` — i.e. rebuilding it would
+    change nothing. A build that died partway never counts as up to date
+    (its hashes are cleared before writing starts)."""
+    meta = collection.metadata or {}
+    return (
+        meta.get("embedding_model") == model_name
+        and meta.get("corpus_hash") == _corpus_hash(chunks)
+        and meta.get("metadata_hash") == _metadata_hash(chunks)
+        and collection.count() == len(chunks)
+    )
 
 
 def build_knowledge_base(chunks, client=None, path="chroma", model_name=DEFAULT_MODEL):
@@ -100,6 +135,14 @@ def build_knowledge_base(chunks, client=None, path="chroma", model_name=DEFAULT_
             "collection first, or use the model it was built with"
         )
 
+    # modify() rejects hnsw:* keys (the distance function is fixed at
+    # creation), so only non-hnsw keys are (re)written below
+    provenance = {key: value for key, value in existing.items() if not key.startswith("hnsw:")}
+    # Clear the content hashes BEFORE writing anything: if this build dies
+    # partway, the half-written collection must not look up to date for
+    # either the old or the new corpus.
+    collection.modify(metadata={**provenance, "corpus_hash": "", "metadata_hash": ""})
+
     embeddings = embed_texts([c["text"] for c in chunks], model_name)
     for i in range(0, len(chunks), _UPSERT_BATCH):
         batch = chunks[i : i + _UPSERT_BATCH]
@@ -116,16 +159,10 @@ def build_knowledge_base(chunks, client=None, path="chroma", model_name=DEFAULT_
         collection.delete(ids=stale_ids)
 
     sample = chunks[0]["metadata"]
-    provenance = {
-        # modify() rejects hnsw:* keys (the distance function is fixed at
-        # creation), so only non-hnsw keys are (re)written here
-        key: value
-        for key, value in existing.items()
-        if not key.startswith("hnsw:")
-    }
     provenance.update(
         embedding_model=model_name,
         corpus_hash=_corpus_hash(chunks),
+        metadata_hash=_metadata_hash(chunks),
         config_id=sample["config_id"],
         chunk_size=sample["chunk_size"],
         chunk_overlap=sample["chunk_overlap"],

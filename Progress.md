@@ -68,11 +68,13 @@ Tasks 1–4 completed. Task 5 initial implementation done. Remaining for the mil
 - Retrieval quality is **measured**, not assumed: `src/retrieval_eval.py` computes deterministic paper-level hit@k and MRR, and **page-level hit@k** for examples labeled with `expected_pages` — the format the November ground-truth Q&A set plugs into. `data/eval_queries_sample.json` holds a 20-query paper-labeled smoke-test set (2 per paper).
 - The config sweep is committed as runnable code: `scripts/run_retrieval_sweep.py` writes machine-readable results to `data/eval/sweep_results.json` (latest run included).
 - Optional local cross-encoder reranking (stretch goal 2): `search(..., rerank=True)` re-scores candidates with FlashRank — it lifted or matched paper hit@1 in every tested config. **Caveat:** the cross-encoder reads query+passage as one 512-token sequence, so with default ~510-token chunks roughly half the pairs get their tails truncated; reranking is most trustworthy on 256–384-token chunk collections (which also score best pre-rerank).
-- Test suite: 49 passing tests across data loading, cleaning, chunking, embeddings, knowledge base, and evaluation.
+- Test suite (September): 49 passing tests across data loading, cleaning, chunking, embeddings, knowledge base, and evaluation.
 
 ## In Progress
 
-- 
+### October — Baseline RAG Pipeline
+
+- **Task 2 (Implement ChromaDB Retriever, #12) — done:** `src/retriever.py` wraps `knowledge_base.search` as a LangChain `BaseRetriever` (`PaperRetriever`). Each result is a `Document` with the chunk text and citation metadata (paper title, arXiv id, page range, similarity, rerank score). `get_retriever()` opens the local store and re-embeds only when the collection is missing or stale (embedding model, chunk text, and chunk metadata are all checked; an interrupted build is never reused). Defaults: k=5, reranking on. On the real corpus the correct paper ranks first for 19/20 sample queries.
 
 ## Blockers
 
@@ -82,7 +84,7 @@ Tasks 1–4 completed. Task 5 initial implementation done. Remaining for the mil
 
 - Pick the canonical cleaned file and re-point the pipeline input at it.
 - When the ground-truth Q&A set arrives (November): measure retrieval accuracy per chunking config (collections are per-config precisely so configs can be compared head-to-head) and tune chunk size / overlap / k.
-- October milestone: baseline RAG pipeline (LangChain + Gemini) on top of `src/knowledge_base.search`.
+- October milestone: baseline RAG pipeline (LangChain + Gemini) on top of `src.retriever.get_retriever()`.
 
 ## Notes
 

@@ -6,6 +6,7 @@ the default config are guaranteed to fit its input window, so nothing is
 silently truncated at embedding time.
 """
 
+import threading
 from functools import lru_cache
 
 # Must stay in sync with chunking.DEFAULT_TOKENIZER: the chunker sizes chunks
@@ -17,8 +18,18 @@ DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
 
 
-@lru_cache(maxsize=2)
+_load_lock = threading.Lock()
+
+
 def get_model(name=DEFAULT_MODEL):
+    # Locked: concurrent first calls (retriever .batch()/async) would each
+    # load their own copy of the model before the cache fills.
+    with _load_lock:
+        return _load_model(name)
+
+
+@lru_cache(maxsize=2)
+def _load_model(name):
     from sentence_transformers import SentenceTransformer
 
     return SentenceTransformer(name)

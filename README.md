@@ -54,6 +54,7 @@ The current codebase contains the actual retrieval stack used for experimentatio
 - Retrieval evaluation with hit@k and MRR metrics
 - Optional local reranking through FlashRank
 - Sweep script to benchmark multiple chunking configurations
+- LangChain retriever over the knowledge base (`src/retriever.py`) returning Documents with citation metadata
 
 ## Repository structure
 
@@ -91,11 +92,13 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   ├── data_io.py
 │   ├── embedding.py
 │   ├── knowledge_base.py
-│   └── retrieval_eval.py
+│   ├── retrieval_eval.py
+│   └── retriever.py
 ├── tests/
 │   ├── test_chunking.py
 │   ├── test_cleaning.py
-│   └── test_knowledge_base.py
+│   ├── test_knowledge_base.py
+│   └── test_retriever.py
 └── chroma/            # local vector store, generated at runtime
 ```
 
@@ -149,6 +152,7 @@ The project currently depends on:
 - `sentence-transformers`
 - `chromadb`
 - `flashrank`
+- `langchain-core`
 - `pandas`, `matplotlib`, `jupyter`, `ipykernel`
 - `pytesseract`, `Pillow`
 - `pytest`
@@ -246,6 +250,21 @@ This supports:
 - semantic retrieval over embedded chunks
 - optional reranking with FlashRank
 - citation-friendly result metadata such as page numbers and paper title
+
+For LangChain components, use the retriever wrapper. `get_retriever()` opens the
+local store and only builds it (about a minute) when it is missing or out of date:
+
+```python
+from src.retriever import get_retriever
+
+retriever = get_retriever(k=5, rerank=True)
+for doc in retriever.invoke("How does LoRA reduce trainable parameters?"):
+    print(doc.metadata["paper_title"], doc.metadata["page_start"], doc.metadata["page_end"])
+```
+
+Each result is a LangChain `Document`: `page_content` holds the chunk text and
+`metadata` holds `chunk_id`, `paper_id`, `paper_title`, `page_start`, `page_end`,
+`similarity`, and `rerank_score` (when reranking is on).
 
 ### 6. Run the evaluation sweep
 
