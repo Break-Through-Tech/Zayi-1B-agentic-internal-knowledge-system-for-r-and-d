@@ -4,7 +4,7 @@
 
 | Name | GitHub Handle | Contribution |
 |---|---|---|
-| Ranidnu-W | @Ranidnu-W | Core project implementation, token-aware chunking, embeddings, ChromaDB knowledge base, retrieval evaluation, collection lifecycle fixes, reranking work, and repo-level maintenance |
+| Deyon Wijewardana | @Ranidnu-W | Core project implementation, token-aware chunking, embeddings, ChromaDB knowledge base, retrieval evaluation, collection lifecycle fixes, reranking work, and repo-level maintenance |
 | MatthewZ1 | @MatthewZ1 | Corrected corrupted figure text, fixed ReAct paper OCR issues, updated data-source handling, and contributed to the corrected dataset workflow |
 | Brayden Uglione | @BrantisIsHacking | Updated text-cleaning and chunking notebooks, consolidated data-cleaning files, supported testing, and developed task delegation and progress tracking |
 | Tharun Kumar Malla Dinakaran | @Thxrunn | Developed EDA and text preprocessing notebooks to analyze, clean, validate, and prepare the research paper dataset for the RAG pipeline. |
