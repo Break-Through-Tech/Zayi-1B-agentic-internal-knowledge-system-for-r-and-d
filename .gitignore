@@ -8,3 +8,5 @@ chroma/
 data/chroma_db/
 chroma_experiments/
 :memory:*
+# local API keys — never commit
+.env

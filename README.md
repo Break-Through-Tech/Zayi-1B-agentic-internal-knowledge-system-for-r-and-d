@@ -55,6 +55,7 @@ The current codebase contains the actual retrieval stack used for experimentatio
 - Optional local reranking through FlashRank
 - Sweep script to benchmark multiple chunking configurations
 - LangChain retriever over the knowledge base (`src/retriever.py`) returning Documents with citation metadata
+- Baseline RAG pipeline (`src/rag.py`): retrieved excerpts → grounded Gemini answer with [S1]-style citations, plus a CLI (`scripts/ask.py`)
 
 ## Repository structure
 
@@ -62,6 +63,7 @@ The current codebase contains the actual retrieval stack used for experimentatio
 .
 ├── README.md
 ├── requirements.txt
+├── .env.example       # copy to .env for API keys (gitignored)
 ├── Challenge-Project-Overview.md
 ├── Progress.md
 ├── FindingsOnResearchPapers.md
@@ -82,6 +84,7 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   ├── 03_text_chunking.ipynb
 │   └── 04_knowledge_base.ipynb
 ├── scripts/
+│   ├── ask.py
 │   ├── run_retrieval_sweep.py
 │   └── test_reference_filtering.py
 ├── src/
@@ -91,12 +94,14 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   ├── data_io.py
 │   ├── embedding.py
 │   ├── knowledge_base.py
+│   ├── rag.py
 │   ├── retrieval_eval.py
 │   └── retriever.py
 ├── tests/
 │   ├── test_chunking.py
 │   ├── test_cleaning.py
 │   ├── test_knowledge_base.py
+│   ├── test_rag.py
 │   └── test_retriever.py
 └── chroma/            # local vector store, generated at runtime
 ```
@@ -151,7 +156,7 @@ The project currently depends on:
 - `sentence-transformers`
 - `chromadb`
 - `flashrank`
-- `langchain-core`
+- `langchain-core`, `langchain-google-genai`, `langchain-openai`, `python-dotenv`
 - `pandas`, `matplotlib`, `jupyter`, `ipykernel`
 - `pytesseract`, `Pillow`
 - `pytest`
@@ -265,7 +270,35 @@ Each result is a LangChain `Document`: `page_content` holds the chunk text and
 `metadata` holds `chunk_id`, `paper_id`, `paper_title`, `page_start`, `page_end`,
 `similarity`, and `rerank_score` (when reranking is on).
 
-### 6. Run the evaluation sweep
+### 6. Ask questions (baseline RAG)
+
+`src/rag.py` answers a question from the retrieved excerpts only, citing them
+inline as [S1], [S2], ... with a matching source list. Gemini is the default
+LLM; OpenRouter works as a fallback. Set up your key once:
+
+```bash
+cp .env.example .env   # then paste your key; .env is gitignored
+```
+
+From the repo root:
+
+```bash
+python scripts/ask.py "How does Self-RAG decide when to retrieve?"
+python scripts/ask.py "How does Self-RAG decide when to retrieve?" --retrieve-only   # no API key needed
+```
+
+Or from Python:
+
+```python
+from src.rag import answer_question
+
+result = answer_question("How does Self-RAG decide when to retrieve?")
+print(result["answer"])
+for s in result["sources"]:
+    print(s["n"], s["paper_title"], s["page_start"], s["page_end"])
+```
+
+### 7. Run the evaluation sweep
 
 The script `scripts/run_retrieval_sweep.py` builds several chunking configurations, evaluates retrieval against the sample labeled query set, prints a summary table, and saves results to `data/eval/sweep_results.json`.
 
@@ -307,7 +340,7 @@ The repository is currently positioned as a working retrieval prototype for the 
 - token-aware chunking is implemented and validated
 - a ChromaDB knowledge base is built per config
 - retrieval quality is measured with a deterministic eval script
-- optional reranking and future RAG orchestration are supported by the architecture
+- optional reranking is available, and a baseline RAG pipeline (LangChain + Gemini) answers questions with page-level citations
 
 The project’s current notes indicate that the team is still deciding on the canonical cleaned dataset and preparing for the official ground-truth Q&A evaluation set planned for the next milestone phase.
 
