@@ -2,9 +2,11 @@
 
 ## Current Status
 
-Tasks 1–4 completed. Task 5 initial implementation done. Remaining for the milestone: settle on the canonical cleaned data file and validate retrieval once the ground-truth Q&A set is available.
+September Tasks 1–4 completed. Task 5 initial implementation done. Remaining for the milestone: settle on the canonical cleaned data file and validate retrieval once the ground-truth Q&A set is available.
 
-## Completed
+October milestone started: Task 1 (validate the September knowledge base) is complete.
+
+## Completed September Tasks
 
 ### Task 1: Set Up Development Environment & Review Dataset
 
@@ -69,6 +71,16 @@ Tasks 1–4 completed. Task 5 initial implementation done. Remaining for the mil
 - The config sweep is committed as runnable code: `scripts/run_retrieval_sweep.py` writes machine-readable results to `data/eval/sweep_results.json` (latest run included).
 - Optional local cross-encoder reranking (stretch goal 2): `search(..., rerank=True)` re-scores candidates with FlashRank — it lifted or matched paper hit@1 in every tested config. **Caveat:** the cross-encoder reads query+passage as one 512-token sequence, so with default ~510-token chunks roughly half the pairs get their tails truncated; reranking is most trustworthy on 256–384-token chunk collections (which also score best pre-rerank).
 - Test suite: 49 passing tests across data loading, cleaning, chunking, embeddings, knowledge base, and evaluation.
+
+## Completed October Tasks
+
+### Task 1: Validate September Knowledge Base & Retrieval Setup
+
+- Added `scripts/validate_knowledge_base.py`, which checks the cleaned data, chunks, embeddings, stored ChromaDB collection and sample searches in one run. It is read-only unless `--build` is passed. Run on 2026-10-14 against the corrected dataset with the interim cleaner, using the default config (page scope, 512 tokens / 64 overlap, `bge-small-en-v1.5`); all checks passed.
+- Data: 218 pages from 10 papers, with no control characters, ligatures or empty pages.
+- Chunks: 553 chunks, none over 512 tokens, with unique ids, complete metadata and valid page ranges. Every paper is represented.
+- Embeddings and store: collection `papers_dcd1d776` holds 553 records whose ids, text and metadata match the chunks built from the current data. Stored vectors are 384-dim, finite and normalized, and re-embedding a 10-chunk sample matched the stored vectors (min cosine 1.0000).
+- Retrieval: 10 sample questions (one per paper) all returned the expected paper in the top 3. The 20-query labeled set scored hit@1 0.85, hit@3 0.95, mrr@3 0.90, matching the September results.
 
 ## In Progress
 
