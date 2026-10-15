@@ -83,7 +83,8 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   └── 04_knowledge_base.ipynb
 ├── scripts/
 │   ├── run_retrieval_sweep.py
-│   └── test_reference_filtering.py
+│   ├── test_reference_filtering.py
+│   └── validate_knowledge_base.py
 ├── src/
 │   ├── __init__.py
 │   ├── chunking.py
