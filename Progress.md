@@ -5,7 +5,7 @@
 *Updated 2026-10-10.*
 
 - **Milestone 1 (September) — complete:** Tasks 1–5 done (data review, EDA, cleaning, chunking, embeddings + ChromaDB knowledge base).
-- **Milestone 2 (October, Baseline RAG Pipeline) — in progress:** the ChromaDB retriever (Task 2, #12) is done and on `main`; the LangChain + Gemini pipeline (Task 3, #13) is in progress. See the October table under In Progress.
+- **Milestone 2 (October, Baseline RAG Pipeline) — in progress:** the ChromaDB retriever (Task 2, #12) is done and on `main`; the baseline LangChain + Gemini pipeline (Task 3, #13) is on `main` too. See the October table under In Progress.
 - Still open from September: choose the canonical cleaned data file; validate retrieval against the ground-truth Q&A set when it arrives (November).
 
 ## Completed — Milestone 1 (September)
@@ -82,11 +82,13 @@
 | --- | --- | --- | --- | --- |
 | 1. Validate September Knowledge Base & Retrieval Setup | #11 | Matthew, Claire | 10/14 | To do (`tests/test_retriever.py`, `tests/test_knowledge_base.py` and notebook 04's sample searches already cover most checks) |
 | 2. Implement ChromaDB Retriever | #12 | Brayden, Matthew, Atai, Deyon | 10/17 | **Done** — on `main` |
-| 3. Build Baseline RAG Pipeline with LangChain & Gemini | #13 | Atai, Brayden, Deyon | 10/24 | In progress — pipeline built and unit-tested; pending a live test with a Gemini API key before merging |
+| 3. Build Baseline RAG Pipeline with LangChain & Gemini | #13 | Atai, Brayden, Deyon | 10/24 | **Done** — on `main` |
 | 4. Add Citation Handling & API Reliability | #14 | Tharun, Claire, Matthew | 10/27 | To do |
 | 5. Test & Document End-to-End Baseline RAG System | #15 | Claire, Tharun | 10/31 | To do |
 
 - **Task 2 (Implement ChromaDB Retriever, #12) — done:** `src/retriever.py` wraps `knowledge_base.search` as a LangChain `BaseRetriever` (`PaperRetriever`). Each result is a `Document` with the chunk text and citation metadata (paper title, arXiv id, page range, similarity, rerank score). `get_retriever()` opens the local store and re-embeds only when the collection is missing or stale (embedding model, chunk text, and chunk metadata are all checked; an interrupted build is never reused). Defaults: k=5, reranking on. On the real corpus the correct paper ranks first for 19/20 sample queries.
+- **Task 3 (Baseline RAG with LangChain & Gemini, #13):** `src/rag.py` builds a linear LCEL chain: question → retriever → numbered excerpts → grounded prompt → LLM → answer with inline [S1], [S2]... citations (S-prefixed so they can't be confused with the papers' own reference numbers) + a matching source list. Gemini (`gemini-3.5-flash`) by default, OpenRouter as fallback; keys come from a local `.env` (see `.env.example`). If nothing is retrieved, the LLM is not called. CLI: `scripts/ask.py` (`--retrieve-only` works without a key).
+- Left for Task 4 (#14): citation formatting/validation and custom retry/backoff — the LLM clients' built-in retries are used for now.
 
 ## Blockers
 
@@ -96,7 +98,7 @@
 
 - Pick the canonical cleaned file and re-point the pipeline input at it.
 - When the ground-truth Q&A set arrives (November): measure retrieval accuracy per chunking config (collections are per-config precisely so configs can be compared head-to-head) and tune chunk size / overlap / k.
-- October: merge the baseline RAG pipeline (#13) after a live API test, then citation handling/API reliability (#14) and end-to-end testing (#15). Retriever entry point for all of these: `src.retriever.get_retriever()`.
+- October: citation handling/API reliability (#14) and end-to-end testing (#15) on top of the baseline RAG chain. Retriever entry point for all of these: `src.retriever.get_retriever()`.
 
 ## Notes
 
