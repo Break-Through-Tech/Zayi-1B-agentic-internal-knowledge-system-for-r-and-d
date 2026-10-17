@@ -38,7 +38,20 @@ from src.knowledge_base import (
 )
 from src.retrieval_eval import evaluate_retrieval
 
-QUERIES_PATH = REPO / "data" / "eval_queries_sample.json"
+# (label, path, needs_remap): "needs_remap" sets are loaded with different
+# field names (question/paper_id) and are translated to the query/
+# expected_paper_id shape evaluate_retrieval() expects.
+EVAL_SETS = [
+    ("eval_queries_sample.json (internal sample, 20 Qs)", REPO / "data" / "eval_queries_sample.json", False),
+    ("ground_truth_qa.json (official set, 40 Qs)", REPO / "data" / "ground_truth_qa.json", True),
+]
+
+
+def load_eval_examples(path, needs_remap):
+    raw = json.load(open(path))
+    if needs_remap:
+        return [{"query": item["question"], "expected_paper_id": item["paper_id"]} for item in raw]
+    return raw
 
 SAMPLE_QUERIES = [
     ("What is retrieval-augmented generation and how does it combine parametric and non-parametric memory?", "2005.11401"),
@@ -181,14 +194,17 @@ def main():
     first = search(collection, SAMPLE_QUERIES[0][0], k=1)[0]
     check("results carry citation fields", all(first.get(k) not in (None, "") for k in ("paper_title", "page_start", "page_end", "chunk_id", "text")))
 
-    # 6. labeled eval set
-    print("\n6. Labeled eval set")
-    examples = json.load(open(QUERIES_PATH))
-    report = evaluate_retrieval(collection, examples, ks=(1, 3))
-    print(f"  {report['n_queries']} queries ({config.scope}-{config.chunk_size}/{config.chunk_overlap}): hit@1={report['hit@1']} hit@3={report['hit@3']} mrr@3={report['mrr@3']}")
-    check("hit@3 >= 0.90 (September sweep: 0.95-1.0)", report["hit@3"] >= 0.90, "a miss is a signal to investigate, not proof the store is broken")
-    for miss in report["misses_at_1"]:
-        print(f"    miss@1: expected {miss['expected']}, got {miss['got']}")
+    # 6. labeled eval sets -- both the team's internal sample and the
+    # official ground-truth set, so a regression against either is visible
+    print("\n6. Labeled eval sets")
+    for label, path, needs_remap in EVAL_SETS:
+        examples = load_eval_examples(path, needs_remap)
+        report = evaluate_retrieval(collection, examples, ks=(1, 3))
+        print(f"\n  {label}")
+        print(f"  {report['n_queries']} queries ({config.scope}-{config.chunk_size}/{config.chunk_overlap}): hit@1={report['hit@1']} hit@3={report['hit@3']} mrr@3={report['mrr@3']}")
+        check(f"hit@3 >= 0.90 on {label}", report["hit@3"] >= 0.90, "a miss is a signal to investigate, not proof the store is broken")
+        for miss in report["misses_at_1"]:
+            print(f"    miss@1: expected {miss['expected']}, got {miss['got']}")
 
     finish()
 
