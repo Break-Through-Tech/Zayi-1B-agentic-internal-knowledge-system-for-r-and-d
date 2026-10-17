@@ -265,7 +265,37 @@ Each result is a LangChain `Document`: `page_content` holds the chunk text and
 `metadata` holds `chunk_id`, `paper_id`, `paper_title`, `page_start`, `page_end`,
 `similarity`, and `rerank_score` (when reranking is on).
 
-### 6. Run the evaluation sweep
+### 6. Generate grounded answers with Gemini
+
+Install the Gemini integration and set `GOOGLE_API_KEY` before running a
+generation request:
+
+```bash
+pip install -r requirements.txt
+export GOOGLE_API_KEY="your-key"
+```
+
+The baseline pipeline retrieves paper excerpts first, then gives only those
+excerpts to Gemini. Answers include page-based citation labels and the
+`answer()` method also returns the exact source `Document` objects:
+
+```python
+from src.rag import create_rag_pipeline
+
+pipeline = create_rag_pipeline(retriever_kwargs={"k": 5, "rerank": True})
+result = pipeline.answer("How does LoRA reduce trainable parameters?")
+print(result.answer)
+for source in result.source_documents:
+    print(source.metadata["paper_title"], source.metadata["page_start"])
+
+print(pipeline.summarize("LoRA"))
+```
+
+For tests or local development without an API key, pass a LangChain-compatible
+fake/chat model through `llm=`. The production chain is created lazily, so
+importing `src.rag` does not make a network request.
+
+### 7. Run the evaluation sweep
 
 The script `scripts/run_retrieval_sweep.py` builds several chunking configurations, evaluates retrieval against the sample labeled query set, prints a summary table, and saves results to `data/eval/sweep_results.json`.
 
