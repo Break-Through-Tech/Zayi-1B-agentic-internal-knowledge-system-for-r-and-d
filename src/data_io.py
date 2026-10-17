@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 # Path works from repo root and from notebooks/. The `_corrected` variant
-# (original + OCR-repaired figure pages, same schema — see notebook 0.5) is
+# (original + repaired ReAct figure text, same schema — see notebook 02) is
 # preferred when present; the untouched original is the fallback.
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _CORRECTED = _DATA_DIR / "curated_papers_text_corrected.json"

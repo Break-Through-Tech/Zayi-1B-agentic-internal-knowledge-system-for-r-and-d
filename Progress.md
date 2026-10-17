@@ -2,11 +2,14 @@
 
 ## Current Status
 
-September Tasks 1–4 completed. Task 5 initial implementation done. Remaining for the milestone: settle on the canonical cleaned data file and validate retrieval once the ground-truth Q&A set is available.
+*Updated 2026-10-17.*
 
-October milestone started: Task 1 (validate the September knowledge base) is complete.
+- **Milestone 1 (September) — complete:** Tasks 1–5 done (data review, EDA, cleaning, chunking, embeddings + ChromaDB knowledge base).
+- **Milestone 2 (October, Baseline RAG Pipeline) — in progress:** Task 1 (validate the September knowledge base, #11) is done; the ChromaDB retriever (Task 2, #12) is done and on `main`; the LangChain + Gemini pipeline (Task 3, #13) is in progress. See the October table under In Progress.
+- Still open from September: choose the canonical cleaned data file.
+- The official ground-truth Q&A set (`data/ground_truth_qa.json`, 40 questions) arrived Oct 11.
 
-## Completed September Tasks
+## Completed — Milestone 1 (September)
 
 ### Task 1: Set Up Development Environment & Review Dataset
 
@@ -46,7 +49,7 @@ October milestone started: Task 1 (validate the September knowledge base) is com
 - Text cleaning and preprocessing landed in two outputs:
   - `data/cleaned_papers_text.json` — per-page records with `section` and `citation_key` fields (218 records).
   - `data/processed/cleaned_papers.json` — flat per-page records (218 records); consumable by the chunking pipeline via the adapter in `src/data_io.py`.
-  - Note: until the team picks a canonical cleaned file, the pipeline chunks the OCR-corrected curated source (`data/curated_papers_text_corrected.json`) through the interim cleaner in `src/cleaning.py`.
+  - Note: until the team picks a canonical cleaned file, the pipeline chunks the figure-text-corrected curated source (`data/curated_papers_text_corrected.json`) through the interim cleaner in `src/cleaning.py`.
 - Ligature artifacts removed in both outputs.
 - Open items to resolve as a team:
   - Choose one canonical cleaned file so Tasks 4–5 build on the same input.
@@ -63,28 +66,41 @@ October milestone started: Task 1 (validate the September knowledge base) is com
 
 ### Task 5: Generate Embeddings & Build ChromaDB Knowledge Base
 
-- Initial implementation done: `src/embedding.py` + `src/knowledge_base.py` embed the chunks with `bge-small-en-v1.5` (512-token input limit — matches the chunk budget) and store text + metadata + vectors in ChromaDB, one collection per chunking config.
+- Done: `src/embedding.py` + `src/knowledge_base.py` embed the chunks with `bge-small-en-v1.5` (512-token input limit — matches the chunk budget) and store text + metadata + vectors in ChromaDB, one collection per chunking config.
 - `notebooks/04_knowledge_base.ipynb` builds the knowledge base (553 vectors from the corrected source) and runs sample semantic-search queries with page-level citations on every result.
 - The ChromaDB store is generated locally (`chroma/`, gitignored) — rebuilt from the notebook in about a minute, so no binary store lives in git. Rebuilds have **replacement semantics**: chunks a previous build wrote that the current corpus no longer produces are deleted (plain upsert left 4 stale pre-OCR chunks searchable — caught in external code review and fixed).
 - Collections carry provenance metadata (embedding model, corpus hash, chunk config), rebuilding an existing collection with a different embedding model is refused, and `search` refuses queries with a mismatched model — mixed embedding spaces fail loudly instead of returning garbage.
-- Retrieval quality is **measured**, not assumed: `src/retrieval_eval.py` computes deterministic paper-level hit@k and MRR, and **page-level hit@k** for examples labeled with `expected_pages` — the format the November ground-truth Q&A set plugs into. `data/eval_queries_sample.json` holds a 20-query paper-labeled smoke-test set (2 per paper).
+- Retrieval quality is **measured**, not assumed: `src/retrieval_eval.py` computes deterministic paper-level hit@k and MRR, and **page-level hit@k** for examples labeled with `expected_pages` — the format the ground-truth Q&A set plugs into. `data/eval_queries_sample.json` holds a 20-query paper-labeled smoke-test set (2 per paper).
 - The config sweep is committed as runnable code: `scripts/run_retrieval_sweep.py` writes machine-readable results to `data/eval/sweep_results.json` (latest run included).
 - Optional local cross-encoder reranking (stretch goal 2): `search(..., rerank=True)` re-scores candidates with FlashRank — it lifted or matched paper hit@1 in every tested config. **Caveat:** the cross-encoder reads query+passage as one 512-token sequence, so with default ~510-token chunks roughly half the pairs get their tails truncated; reranking is most trustworthy on 256–384-token chunk collections (which also score best pre-rerank).
-- Test suite: 49 passing tests across data loading, cleaning, chunking, embeddings, knowledge base, and evaluation.
+- Test suite (September): 49 passing tests across data loading, cleaning, chunking, embeddings, knowledge base, and evaluation.
 
-## Completed October Tasks
+## Completed — Milestone 2 (October)
 
-### Task 1: Validate September Knowledge Base & Retrieval Setup
+### Task 1: Validate September Knowledge Base & Retrieval Setup (#11)
 
 - Added `scripts/validate_knowledge_base.py`, which checks the cleaned data, chunks, embeddings, stored ChromaDB collection and sample searches in one run. It is read-only unless `--build` is passed. Run on 2026-10-14 against the corrected dataset with the interim cleaner, using the default config (page scope, 512 tokens / 64 overlap, `bge-small-en-v1.5`); all checks passed.
 - Data: 218 pages from 10 papers, with no control characters, ligatures or empty pages.
 - Chunks: 553 chunks, none over 512 tokens, with unique ids, complete metadata and valid page ranges. Every paper is represented.
 - Embeddings and store: collection `papers_dcd1d776` holds 553 records whose ids, text and metadata match the chunks built from the current data. Stored vectors are 384-dim, finite and normalized, and re-embedding a 10-chunk sample matched the stored vectors (min cosine 1.0000).
 - Retrieval: 10 sample questions (one per paper) all returned the expected paper in the top 3. The 20-query labeled set scored hit@1 0.85, hit@3 0.95, mrr@3 0.90, matching the September results.
+- Separately validated against the official 40-question `ground_truth_qa.json` (arrived 2026-10-11, after this script's `--queries` default was set): hit@1 0.875, hit@3 0.925, hit@5 0.975, mrr@5 0.911, run both through `src.retrieval_eval.evaluate_retrieval` directly and through the `src.retriever.get_retriever()`/`PaperRetriever` interface (identical numbers, confirming the retriever wrapper is faithful to the underlying search). All 5 rank-1 misses read as genuine cross-paper topic overlap on manual inspection, not retrieval bugs.
+
+### Task 2: Implement ChromaDB Retriever (#12)
+
+- Done: `src/retriever.py` wraps `knowledge_base.search` as a LangChain `BaseRetriever` (`PaperRetriever`). Each result is a `Document` with the chunk text and citation metadata (paper title, arXiv id, page range, similarity, rerank score). `get_retriever()` opens the local store and re-embeds only when the collection is missing or stale (embedding model, chunk text, and chunk metadata are all checked; an interrupted build is never reused). Defaults: k=5, reranking on. On the real corpus the correct paper ranks first for 19/20 sample queries.
 
 ## In Progress
 
-- 
+### Milestone 2 (October) — Baseline RAG Pipeline
+
+| Task | Issue | Assignees | Due | Status |
+| --- | --- | --- | --- | --- |
+| 1. Validate September Knowledge Base & Retrieval Setup | #11 | Matthew, Claire | 10/14 | **Done** — see Completed above |
+| 2. Implement ChromaDB Retriever | #12 | Brayden, Matthew, Atai, Deyon | 10/17 | **Done** — on `main` |
+| 3. Build Baseline RAG Pipeline with LangChain & Gemini | #13 | Atai, Brayden, Deyon | 10/24 | In progress — pipeline built and unit-tested; pending a live test with a Gemini API key before merging |
+| 4. Add Citation Handling & API Reliability | #14 | Tharun, Claire, Matthew | 10/27 | To do |
+| 5. Test & Document End-to-End Baseline RAG System | #15 | Claire, Tharun | 10/31 | To do |
 
 ## Blockers
 
@@ -93,12 +109,12 @@ October milestone started: Task 1 (validate the September knowledge base) is com
 ## Next Steps
 
 - Pick the canonical cleaned file and re-point the pipeline input at it.
-- When the ground-truth Q&A set arrives (November): measure retrieval accuracy per chunking config (collections are per-config precisely so configs can be compared head-to-head) and tune chunk size / overlap / k.
-- October milestone: baseline RAG pipeline (LangChain + Gemini) on top of `src/knowledge_base.search`.
+- Measure retrieval accuracy per chunking config against the official ground-truth Q&A set (collections are per-config precisely so configs can be compared head-to-head) and tune chunk size / overlap / k.
+- October: merge the baseline RAG pipeline (#13) after a live API test, then citation handling/API reliability (#14) and end-to-end testing (#15). Retriever entry point for all of these: `src.retriever.get_retriever()`.
 
 ## Notes
 
-- Chunk-config sweep (rerun 2026-09-20 from a clean store via `scripts/run_retrieval_sweep.py`; results in `data/eval/sweep_results.json`): all 6 configs score paper hit@1 0.85–0.95 and hit@3 0.95–1.0 — differences are 1–2 queries, i.e. within noise at this sample size. Two consistent signals: FlashRank reranking lifted or matched hit@1 in every config (weakest 0.85 → 0.95), and smaller chunks (256–384) edge out 512 without rerank. Decision: keep the current default until the official ground-truth Q&A set arrives, then re-run this sweep (with page labels) for the final call; use `rerank=True` in the October generator, ideally over a 256–384-token collection given the reranker's 512-token pair limit.
+- Chunk-config sweep (rerun 2026-09-20 from a clean store via `scripts/run_retrieval_sweep.py`; results in `data/eval/sweep_results.json`): all 6 configs score paper hit@1 0.85–0.95 and hit@3 0.95–1.0 — differences are 1–2 queries, i.e. within noise at this sample size. Two consistent signals: FlashRank reranking lifted or matched hit@1 in every config (weakest 0.85 → 0.95), and smaller chunks (256–384) edge out 512 without rerank. Decision: keep the current default for now; re-run this sweep against the official ground-truth Q&A set (with page labels, once available) for the final call; use `rerank=True` in the October generator, ideally over a 256–384-token collection given the reranker's 512-token pair limit.
 
 - Reference-heavy pages may introduce noise into semantic retrieval.
 
@@ -108,6 +124,6 @@ October milestone started: Task 1 (validate the September knowledge base) is com
 
   Decision: do not adopt reference-page filtering at this time. The experiment found no measurable retrieval benefit on the current query set, so the added preprocessing complexity is not justified.
 
-  Caveat: results are based on the current ~20-query evaluation set and should be revalidated when the larger ground-truth Q&A dataset becomes available
+  Caveat: results are based on the current ~20-query evaluation set and should be revalidated against the official ground-truth Q&A set.
 
 - Word counts and model token counts diverge significantly on this corpus: measured with the bge-small tokenizer, ~62% of the 400-word chunks exceed 512 tokens (max ~1,979). Embedding models silently truncate input past their limit (`all-MiniLM-L6-v2` at 256 tokens, `bge-small-en-v1.5` at 512), so over-length chunks are only partially represented by their embeddings. Sizing chunks in tokens (with the same tokenizer as the embedding model) avoids this.

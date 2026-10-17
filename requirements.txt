@@ -7,6 +7,9 @@ sentence-transformers>=3.0
 chromadb>=1.0
 flashrank>=0.2  # local cross-encoder reranking (stretch goal 2)
 
+# Retriever (October)
+langchain-core>=1.0  # BaseRetriever / Document interface
+
 # Notebooks & analysis (Tasks 2+)
 jupyter
 ipykernel

@@ -4,7 +4,7 @@
 
 | Name | GitHub Handle | Contribution |
 |---|---|---|
-| Ranidnu-W | @Ranidnu-W | Core project implementation, token-aware chunking, embeddings, ChromaDB knowledge base, retrieval evaluation, collection lifecycle fixes, reranking work, and repo-level maintenance |
+| Deyon Wijewardana | @Ranidnu-W | Core project implementation, token-aware chunking, embeddings, ChromaDB knowledge base, retrieval evaluation, collection lifecycle fixes, reranking work, and repo-level maintenance |
 | MatthewZ1 | @MatthewZ1 | Corrected corrupted figure text, fixed ReAct paper OCR issues, updated data-source handling, and contributed to the corrected dataset workflow |
 | Brayden Uglione | @BrantisIsHacking | Updated text-cleaning and chunking notebooks, consolidated data-cleaning files, supported testing, and developed task delegation and progress tracking |
 | Tharun Kumar Malla Dinakaran | @Thxrunn | Developed EDA and text preprocessing notebooks to analyze, clean, validate, and prepare the research paper dataset for the RAG pipeline. |
@@ -54,6 +54,7 @@ The current codebase contains the actual retrieval stack used for experimentatio
 - Retrieval evaluation with hit@k and MRR metrics
 - Optional local reranking through FlashRank
 - Sweep script to benchmark multiple chunking configurations
+- LangChain retriever over the knowledge base (`src/retriever.py`) returning Documents with citation metadata
 
 ## Repository structure
 
@@ -76,7 +77,6 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   └── processed/
 │       └── cleaned_papers.json
 ├── notebooks/
-│   ├── 0.5_corrupted_text_fix.ipynb
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_text_preprocessing.ipynb
 │   ├── 03_text_chunking.ipynb
@@ -92,11 +92,13 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   ├── data_io.py
 │   ├── embedding.py
 │   ├── knowledge_base.py
-│   └── retrieval_eval.py
+│   ├── retrieval_eval.py
+│   └── retriever.py
 ├── tests/
 │   ├── test_chunking.py
 │   ├── test_cleaning.py
-│   └── test_knowledge_base.py
+│   ├── test_knowledge_base.py
+│   └── test_retriever.py
 └── chroma/            # local vector store, generated at runtime
 ```
 
@@ -150,6 +152,7 @@ The project currently depends on:
 - `sentence-transformers`
 - `chromadb`
 - `flashrank`
+- `langchain-core`
 - `pandas`, `matplotlib`, `jupyter`, `ipykernel`
 - `pytesseract`, `Pillow`
 - `pytest`
@@ -248,6 +251,21 @@ This supports:
 - optional reranking with FlashRank
 - citation-friendly result metadata such as page numbers and paper title
 
+For LangChain components, use the retriever wrapper. `get_retriever()` opens the
+local store and only builds it (about a minute) when it is missing or out of date:
+
+```python
+from src.retriever import get_retriever
+
+retriever = get_retriever(k=5, rerank=True)
+for doc in retriever.invoke("How does LoRA reduce trainable parameters?"):
+    print(doc.metadata["paper_title"], doc.metadata["page_start"], doc.metadata["page_end"])
+```
+
+Each result is a LangChain `Document`: `page_content` holds the chunk text and
+`metadata` holds `chunk_id`, `paper_id`, `paper_title`, `page_start`, `page_end`,
+`similarity`, and `rerank_score` (when reranking is on).
+
 ### 6. Run the evaluation sweep
 
 The script `scripts/run_retrieval_sweep.py` builds several chunking configurations, evaluates retrieval against the sample labeled query set, prints a summary table, and saves results to `data/eval/sweep_results.json`.
@@ -264,7 +282,6 @@ The sweep compares different chunk sizes, overlaps, and page-vs-paper scope, and
 
 The notebook flow is:
 
-- `notebooks/0.5_corrupted_text_fix.ipynb`: OCR/corruption repair work on the raw text
 - `notebooks/01_data_exploration.ipynb`: dataset inspection and EDA
 - `notebooks/02_text_preprocessing.ipynb`: cleaning and normalization
 - `notebooks/03_text_chunking.ipynb`: chunking experiments and stats
