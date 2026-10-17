@@ -48,7 +48,7 @@
 - Text cleaning and preprocessing landed in two outputs:
   - `data/cleaned_papers_text.json` — per-page records with `section` and `citation_key` fields (218 records).
   - `data/processed/cleaned_papers.json` — flat per-page records (218 records); consumable by the chunking pipeline via the adapter in `src/data_io.py`.
-  - Note: until the team picks a canonical cleaned file, the pipeline chunks the OCR-corrected curated source (`data/curated_papers_text_corrected.json`) through the interim cleaner in `src/cleaning.py`.
+  - Note: until the team picks a canonical cleaned file, the pipeline chunks the figure-text-corrected curated source (`data/curated_papers_text_corrected.json`) through the interim cleaner in `src/cleaning.py`.
 - Ligature artifacts removed in both outputs.
 - Open items to resolve as a team:
   - Choose one canonical cleaned file so Tasks 4–5 build on the same input.

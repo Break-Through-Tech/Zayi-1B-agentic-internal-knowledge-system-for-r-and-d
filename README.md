@@ -77,7 +77,6 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   └── processed/
 │       └── cleaned_papers.json
 ├── notebooks/
-│   ├── 0.5_corrupted_text_fix.ipynb
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_text_preprocessing.ipynb
 │   ├── 03_text_chunking.ipynb
@@ -282,7 +281,6 @@ The sweep compares different chunk sizes, overlaps, and page-vs-paper scope, and
 
 The notebook flow is:
 
-- `notebooks/0.5_corrupted_text_fix.ipynb`: OCR/corruption repair work on the raw text
 - `notebooks/01_data_exploration.ipynb`: dataset inspection and EDA
 - `notebooks/02_text_preprocessing.ipynb`: cleaning and normalization
 - `notebooks/03_text_chunking.ipynb`: chunking experiments and stats
