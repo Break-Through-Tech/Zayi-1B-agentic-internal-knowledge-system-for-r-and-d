@@ -14,12 +14,16 @@ OpenRouter as a fallback provider (see `get_llm`).
 """
 
 import os
+import re
 from pathlib import Path
 
 from dotenv import dotenv_values
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
+from google.genai.errors import ServerError
+from langchain_google_genai.chat_models import GoogleModelNotFoundError
 
 # Repo-root .env, resolved from this file so it works from any working dir.
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
@@ -188,6 +192,45 @@ def _check_question(question):
         raise ValueError("question must be a non-empty string")
     return question.strip()
 
+def is_retryable_error(error):
+    """Retry temporary API errors, not permanent configuration errors."""
+    if isinstance(error, GoogleModelNotFoundError):
+        return False
+
+    status = getattr(error, "status_code", None)
+
+    if status is None:
+        status = getattr(error, "code", None)
+
+    return status in (429, 500, 502, 503, 504)
+
+
+@retry(
+    retry=retry_if_exception(is_retryable_error),
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=2, min=2, max=30),
+    reraise=True,
+)
+def invoke_with_retry(generate, inputs, config):
+    """Invoke Gemini with exponential backoff for temporary failures."""
+    return generate.invoke(inputs, config=config)
+
+def validate_citations(answer, sources):
+    """Check that cited source labels exist in the retrieved sources."""
+    cited_numbers = {
+        int(number)
+        for number in re.findall(r"\[S(\d+)\]", answer)
+    }
+
+    valid_numbers = {source["n"] for source in sources}
+    invalid_numbers = sorted(cited_numbers - valid_numbers)
+
+    return {
+        "valid": len(invalid_numbers) == 0,
+        "cited_sources": sorted(cited_numbers),
+        "invalid_sources": invalid_numbers,
+    }
+
 
 def build_rag_chain(retriever, llm):
     """LCEL chain: question str -> {"question", "answer", "sources"}.
@@ -200,10 +243,24 @@ def build_rag_chain(retriever, llm):
         question, docs = inputs["question"], inputs["docs"]
         if not docs:
             return {"question": question, "answer": NO_CONTEXT_ANSWER, "sources": []}
-        answer = generate.invoke(
-            {"question": question, "context": format_context(docs)}, config
-        )
-        return {"question": question, "answer": answer, "sources": sources_from(docs)}
+        answer = invoke_with_retry(
+                generate,
+               {"question": question, "context": format_context(docs)},
+               config,
+)
+        sources = sources_from(docs)
+        citation_check = validate_citations(answer, sources)
+
+        if not citation_check["valid"]:
+            raise ValueError(
+                f"Invalid citation references: {citation_check['invalid_sources']}"
+            )
+
+        return {
+            "question": question,
+            "answer": answer,
+            "sources": sources,
+        }
 
     chain = (
         RunnableLambda(_check_question)
