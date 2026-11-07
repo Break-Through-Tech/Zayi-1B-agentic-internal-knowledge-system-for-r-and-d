@@ -8,8 +8,10 @@ colliding (chunk ids are only unique within a config).
 
 import hashlib
 import json
+import shutil
 import threading
 from functools import lru_cache
+from pathlib import Path
 
 import chromadb
 
@@ -37,11 +39,38 @@ def _get_ranker(model_name=DEFAULT_RERANKER):
         return _load_ranker(model_name)
 
 
+# FlashRank caches its model in /tmp by default, which macOS empties every
+# few days — files go, the folder stays, and FlashRank (which only checks
+# that the folder exists) skips the download and crashes with NoSuchFile.
+# Keep the model in a persistent per-user cache instead.
+RERANKER_CACHE_DIR = Path.home() / ".cache" / "flashrank"
+_RERANKER_FILES = (  # everything FlashRank opens, besides the model weights
+    "config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "special_tokens_map.json",
+)
+
+
+def _repair_reranker_cache(cache_dir, model_name, model_file):
+    """Delete a partial/emptied model folder so FlashRank re-downloads it."""
+    model_dir = Path(cache_dir) / model_name
+    required = (model_file, *_RERANKER_FILES)
+    if model_dir.is_dir() and not all((model_dir / f).is_file() for f in required):
+        shutil.rmtree(model_dir)
+
+
 @lru_cache(maxsize=2)
 def _load_ranker(model_name):
     from flashrank import Ranker
+    from flashrank.Config import model_file_map
 
-    return Ranker(model_name=model_name, max_length=_RERANKER_MAX_LENGTH)
+    _repair_reranker_cache(RERANKER_CACHE_DIR, model_name, model_file_map[model_name])
+    return Ranker(
+        model_name=model_name,
+        cache_dir=str(RERANKER_CACHE_DIR),
+        max_length=_RERANKER_MAX_LENGTH,
+    )
 
 
 def _corpus_hash(chunks):

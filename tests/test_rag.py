@@ -103,6 +103,7 @@ def test_chain_output_shape_and_prompt_contents():
         "question": "What does LoRA freeze?",
         "answer": "LoRA freezes weights [S1].",
         "sources": sources_from(DOCS),
+        "citations": {"valid": True, "cited_sources": [1], "invalid_sources": []},
     }
     assert retriever.calls == ["What does LoRA freeze?"]  # retrieved exactly once
     assert len(llm.prompts) == 1
@@ -120,6 +121,20 @@ def test_works_with_a_real_chat_model_class():
     assert len(result["sources"]) == 2
 
 
+def test_out_of_range_citation_is_flagged_not_raised():
+    # regression: an [S#] beyond the retrieved sources used to raise
+    # ValueError, discarding the whole answer
+    retriever = FakeRetriever(docs=DOCS, calls=[])
+    llm = GenericFakeChatModel(messages=iter(["Claim [S1], other claim [S9]."]))
+    result = build_rag_chain(retriever, llm).invoke("What is RAG?")
+    assert result["answer"] == "Claim [S1], other claim [S9]."
+    assert result["citations"] == {
+        "valid": False,
+        "cited_sources": [1, 9],
+        "invalid_sources": [9],
+    }
+
+
 def test_no_docs_skips_llm():
     chain, retriever, llm = _chain(docs=[])
     result = chain.invoke("Something not in the papers?")
@@ -127,6 +142,7 @@ def test_no_docs_skips_llm():
         "question": "Something not in the papers?",
         "answer": NO_CONTEXT_ANSWER,
         "sources": [],
+        "citations": {"valid": True, "cited_sources": [], "invalid_sources": []},
     }
     assert llm.prompts == []
     assert len(retriever.calls) == 1

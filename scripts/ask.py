@@ -86,9 +86,12 @@ def main():
 
     try:
         result = build_rag_chain(retriever, llm).invoke(args.question)
-    except Exception as err:  # auth, unknown model, quota, network: one line, not a traceback
-        sys.exit(f"error: LLM call failed ({type(err).__name__}): {err}")
+    except Exception as err:  # auth, quota, network, reranker: one line, not a traceback
+        sys.exit(f"error: could not answer ({type(err).__name__}): {err}")
     print(result["answer"].strip())
+    if not result["citations"]["valid"]:
+        bad = ", ".join(f"[{source_label(n)}]" for n in result["citations"]["invalid_sources"])
+        print(f"\nwarning: answer cites {bad}, which is not one of the sources below")
     if result["sources"]:
         print("\nSources:")
         _print_sources(result["sources"])

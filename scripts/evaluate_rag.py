@@ -1,16 +1,19 @@
 import argparse
 import json
-import re
+import sys
 import time
 from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO))
 
 from src.rag import build_rag_chain, get_llm, validate_citations
 from src.retriever import get_retriever
 
 
 def evaluate(limit):
-    dataset_path = Path("data/ground_truth_qa.json")
-    output_path = Path("data/eval/rag_evaluation.json")
+    dataset_path = REPO / "data" / "ground_truth_qa.json"
+    output_path = REPO / "data" / "eval" / "rag_evaluation.json"
 
     questions = json.loads(dataset_path.read_text(encoding="utf-8"))
     questions = questions[:limit]

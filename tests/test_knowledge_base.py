@@ -220,3 +220,36 @@ def test_metadata_filter(chunks, client):
         collection, "defensive structures", k=2, where={"paper_id": "optim"}
     )
     assert results and all(r["paper_id"] == "optim" for r in results)
+
+
+def test_reranker_cache_repair_drops_emptied_or_partial_model_dirs(tmp_path):
+    # regression: macOS emptied FlashRank's /tmp model folder; FlashRank only
+    # checks the folder exists, so it skipped the download and crashed
+    from src.knowledge_base import _RERANKER_FILES, _repair_reranker_cache
+
+    model, weights = "some-ranker", "model.onnx"
+    emptied = tmp_path / model
+    emptied.mkdir()
+    _repair_reranker_cache(tmp_path, model, weights)
+    assert not emptied.exists()
+
+    partial = tmp_path / model
+    partial.mkdir()
+    (partial / weights).write_bytes(b"x")  # tokenizer files missing
+    _repair_reranker_cache(tmp_path, model, weights)
+    assert not partial.exists()
+
+    complete = tmp_path / model
+    complete.mkdir()
+    for name in (weights, *_RERANKER_FILES):
+        (complete / name).write_text("{}")
+    _repair_reranker_cache(tmp_path, model, weights)
+    assert complete.exists() and len(list(complete.iterdir())) == 5
+
+    _repair_reranker_cache(tmp_path, "never-downloaded", weights)  # no-op
+
+
+def test_reranker_uses_a_persistent_cache_not_tmp():
+    from src.knowledge_base import RERANKER_CACHE_DIR
+
+    assert not str(RERANKER_CACHE_DIR).startswith(("/tmp", "/private/tmp"))

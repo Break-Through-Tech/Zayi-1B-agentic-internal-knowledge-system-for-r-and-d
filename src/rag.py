@@ -1,4 +1,4 @@
-﻿"""Baseline RAG pipeline: retrieve paper excerpts, answer with an LLM (Task 13).
+"""Baseline RAG pipeline: retrieve paper excerpts, answer with an LLM (Task 13).
 
 Linear on purpose — question -> retriever -> numbered context -> grounded
 prompt -> LLM -> answer + sources. The context blocks and the returned
@@ -22,7 +22,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
-from google.genai.errors import ServerError
 from langchain_google_genai.chat_models import GoogleModelNotFoundError
 
 # Repo-root .env, resolved from this file so it works from any working dir.
@@ -100,8 +99,8 @@ def get_llm(provider=None, model=None, temperature=None):
 
     Keys and defaults come from the environment, with a repo-root `.env`
     loaded first (already-set variables win). Provider packages are imported
-    lazily so only the one in use needs to be installed. Retries on rate
-    limits/transient errors are left to the client libraries' defaults.
+    lazily. Rate limits and transient server errors are retried with backoff
+    by `build_rag_chain` (see `invoke_with_retry`).
 
     `temperature=None` keeps the provider's default — Google recommends
     leaving Gemini 3 models at theirs, and langchain-google-genai only does
@@ -192,6 +191,7 @@ def _check_question(question):
         raise ValueError("question must be a non-empty string")
     return question.strip()
 
+
 def is_retryable_error(error):
     """Retry temporary API errors, not permanent configuration errors."""
     if isinstance(error, GoogleModelNotFoundError):
@@ -215,6 +215,7 @@ def invoke_with_retry(generate, inputs, config):
     """Invoke Gemini with exponential backoff for temporary failures."""
     return generate.invoke(inputs, config=config)
 
+
 def validate_citations(answer, sources):
     """Check that cited source labels exist in the retrieved sources."""
     cited_numbers = {
@@ -233,7 +234,11 @@ def validate_citations(answer, sources):
 
 
 def build_rag_chain(retriever, llm):
-    """LCEL chain: question str -> {"question", "answer", "sources"}.
+    """LCEL chain: question str -> {"question", "answer", "sources", "citations"}.
+
+    `citations` is `validate_citations(answer, sources)`. An answer citing a
+    label that wasn't retrieved (e.g. [S7] with 5 sources) is returned and
+    flagged there (`valid` False), not discarded — callers decide what to do.
 
     Retrieves once per question; if nothing is retrieved, returns
     NO_CONTEXT_ANSWER without calling the LLM."""
@@ -242,24 +247,19 @@ def build_rag_chain(retriever, llm):
     def _answer(inputs, config):
         question, docs = inputs["question"], inputs["docs"]
         if not docs:
-            return {"question": question, "answer": NO_CONTEXT_ANSWER, "sources": []}
-        answer = invoke_with_retry(
+            answer, sources = NO_CONTEXT_ANSWER, []
+        else:
+            answer = invoke_with_retry(
                 generate,
-               {"question": question, "context": format_context(docs)},
-               config,
-)
-        sources = sources_from(docs)
-        citation_check = validate_citations(answer, sources)
-
-        if not citation_check["valid"]:
-            raise ValueError(
-                f"Invalid citation references: {citation_check['invalid_sources']}"
+                {"question": question, "context": format_context(docs)},
+                config,
             )
-
+            sources = sources_from(docs)
         return {
             "question": question,
             "answer": answer,
             "sources": sources,
+            "citations": validate_citations(answer, sources),
         }
 
     chain = (
