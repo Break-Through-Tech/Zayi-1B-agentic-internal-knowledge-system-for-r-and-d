@@ -27,7 +27,7 @@ def _normalize(example):
     return query, expected_paper, None
 
 
-def evaluate_retrieval(collection, examples, ks=(1, 3), rerank=False):
+def evaluate_retrieval(collection, examples, ks=(1, 3), rerank=False, rerank_pool=None):
     """Hit rates at each k in `ks` (paper-level always; page-level over the
     examples that carry page labels), paper-level MRR, and per-query details
     for error analysis. Also lists the queries that missed at rank 1."""
@@ -46,7 +46,7 @@ def evaluate_retrieval(collection, examples, ks=(1, 3), rerank=False):
 
     for example in examples:
         query, expected_paper, expected_pages = _normalize(example)
-        rows = search(collection, query, k=max_k, rerank=rerank)
+        rows = search(collection, query, k=max_k, rerank=rerank, rerank_pool=rerank_pool)
 
         paper_rank = next(
             (i + 1 for i, r in enumerate(rows) if r["paper_id"] == expected_paper), None
@@ -98,6 +98,8 @@ def evaluate_retrieval(collection, examples, ks=(1, 3), rerank=False):
 
     n = len(examples)
     report = {"n_queries": n, "n_page_labeled": n_page_labeled, "rerank": rerank}
+    if rerank:
+        report["rerank_pool"] = rerank_pool or max(max_k * 4, 16)
     for k in ks:
         report[f"hit@{k}"] = round(paper_hits[k] / n, 3)  # paper-level
     # depth-suffixed: ranks are only observed within the top max_k results

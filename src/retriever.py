@@ -54,6 +54,7 @@ class PaperRetriever(BaseRetriever):
     collection: Any
     k: int = Field(default=DEFAULT_K, ge=1)
     rerank: bool = DEFAULT_RERANK
+    rerank_pool: int | None = Field(default=None, ge=1)  # None: search() default, max(4k, 16)
     model_name: str = DEFAULT_MODEL
     where: dict | None = None  # optional Chroma metadata filter, e.g. {"paper_id": "2106.09685"}
 
@@ -67,6 +68,7 @@ class PaperRetriever(BaseRetriever):
             model_name=self.model_name,
             where=self.where or None,  # chroma rejects an empty filter {}
             rerank=self.rerank,
+            rerank_pool=self.rerank_pool,
         )
         return [row_to_document(row) for row in rows]
 
@@ -118,6 +120,7 @@ def get_retriever(
     model_name=DEFAULT_MODEL,
     where=None,
     rebuild=False,
+    rerank_pool=None,
 ):
     """Ready-to-use retriever over the curated papers:
 
@@ -129,5 +132,10 @@ def get_retriever(
         config=config, path=path, client=client, model_name=model_name, rebuild=rebuild
     )
     return PaperRetriever(
-        collection=collection, k=k, rerank=rerank, model_name=model_name, where=where
+        collection=collection,
+        k=k,
+        rerank=rerank,
+        rerank_pool=rerank_pool,
+        model_name=model_name,
+        where=where,
     )

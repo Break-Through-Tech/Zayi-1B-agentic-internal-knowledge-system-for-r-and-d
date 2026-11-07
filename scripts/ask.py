@@ -44,6 +44,9 @@ def main():
     parser.add_argument("question")
     parser.add_argument("--k", type=int, default=5, help="excerpts to retrieve")
     parser.add_argument("--no-rerank", action="store_true", help="skip cross-encoder reranking")
+    parser.add_argument(
+        "--rerank-pool", type=int, help="candidates to rerank (default max(4k, 16); larger = slower)"
+    )
     parser.add_argument("--provider", choices=PROVIDERS, help="default: LLM_PROVIDER or gemini")
     parser.add_argument("--model", help="model name (default from .env / provider default)")
     parser.add_argument(
@@ -54,6 +57,8 @@ def main():
         parser.error("question must not be empty")
     if args.k < 1:
         parser.error("--k must be at least 1")
+    if args.rerank_pool is not None and args.rerank_pool < args.k:
+        parser.error("--rerank-pool must be at least --k")
 
     llm = None
     if not args.retrieve_only:
@@ -64,7 +69,7 @@ def main():
 
     from src.retriever import get_retriever
 
-    retriever = get_retriever(k=args.k, rerank=not args.no_rerank)
+    retriever = get_retriever(k=args.k, rerank=not args.no_rerank, rerank_pool=args.rerank_pool)
 
     if args.retrieve_only:
         docs = retriever.invoke(args.question)

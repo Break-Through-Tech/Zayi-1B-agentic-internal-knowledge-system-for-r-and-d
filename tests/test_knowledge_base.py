@@ -253,3 +253,19 @@ def test_reranker_uses_a_persistent_cache_not_tmp():
     from src.knowledge_base import RERANKER_CACHE_DIR
 
     assert not str(RERANKER_CACHE_DIR).startswith(("/tmp", "/private/tmp"))
+
+
+def test_rerank_pool_sets_candidate_count(chunks, client, monkeypatch):
+    import src.knowledge_base as kb
+
+    collection = build_knowledge_base(chunks, client=client)
+    seen = []
+    monkeypatch.setattr(kb, "_rerank", lambda query, rows: seen.append(len(rows)) or rows)
+    total = collection.count()
+
+    search(collection, "castles", k=2, rerank=True)  # default: max(4k, 16), capped at total
+    search(collection, "castles", k=2, rerank=True, rerank_pool=3)
+    search(collection, "castles", k=2, rerank=False, rerank_pool=3)  # ignored without rerank
+    assert seen == [min(16, total), 3]
+    with pytest.raises(ValueError, match="rerank_pool"):
+        search(collection, "castles", k=3, rerank=True, rerank_pool=2)

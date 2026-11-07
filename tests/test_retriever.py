@@ -88,6 +88,15 @@ def test_rerank_adds_scores_and_respects_k(collection):
     assert "rerank_score" in docs[0].metadata
 
 
+def test_rerank_pool_is_passed_to_search(collection, monkeypatch):
+    import src.knowledge_base as kb
+
+    seen = []
+    monkeypatch.setattr(kb, "_rerank", lambda query, rows: seen.append(len(rows)) or rows)
+    PaperRetriever(collection=collection, k=1, rerank_pool=2).invoke("castles")
+    assert seen == [2]
+
+
 def test_where_filter_restricts_papers(collection):
     docs = PaperRetriever(
         collection=collection, k=5, rerank=False, where={"paper_id": "optim"}

@@ -201,15 +201,20 @@ def build_knowledge_base(chunks, client=None, path="chroma", model_name=DEFAULT_
     return collection
 
 
-def search(collection, query, k=5, model_name=DEFAULT_MODEL, where=None, rerank=False):
+def search(
+    collection, query, k=5, model_name=DEFAULT_MODEL, where=None, rerank=False, rerank_pool=None
+):
     """Semantic search; returns result dicts with the fields needed for a
     cited answer: text, similarity, paper id/title, and the page range.
 
-    With `rerank=True`, a wider candidate set is fetched and re-scored by a
-    local cross-encoder (FlashRank) before returning the top k — results
-    then carry a `rerank_score` and are ordered by it."""
+    With `rerank=True`, a wider candidate set (`rerank_pool` chunks, default
+    max(4k, 16)) is fetched and re-scored by a local cross-encoder
+    (FlashRank) before returning the top k — results then carry a
+    `rerank_score` and are ordered by it."""
     if k < 1:
         raise ValueError(f"k must be >= 1, got {k}")
+    if rerank_pool is not None and rerank_pool < k:
+        raise ValueError(f"rerank_pool ({rerank_pool}) must be >= k ({k})")
     _require_cosine(collection)
     built_with = (collection.metadata or {}).get("embedding_model")
     if built_with is not None and built_with != model_name:
@@ -220,7 +225,7 @@ def search(collection, query, k=5, model_name=DEFAULT_MODEL, where=None, rerank=
     total = collection.count()
     if total == 0:
         return []
-    n_candidates = max(k * 4, 16) if rerank else k
+    n_candidates = (rerank_pool or max(k * 4, 16)) if rerank else k
     result = collection.query(
         query_embeddings=[embed_query(query, model_name).tolist()],
         n_results=min(n_candidates, total),

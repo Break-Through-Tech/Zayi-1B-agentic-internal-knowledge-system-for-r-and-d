@@ -1,0 +1,387 @@
+{
+  "description": "Page labels for data/ground_truth_qa.json (same order, 1-based index). expected_pages = pages (1-based, as in the chunk metadata) whose text contains the evidence for the ground-truth answer; a retrieved chunk counts as a page hit if its page range contains any of them. Located by searching each paper's page text for answer phrases, then checked by reading the passage.",
+  "labels": [
+    {
+      "index": 1,
+      "paper_id": "2005.11401",
+      "question": "What is the parameter count of the BART-large generator used as the parametric memory in the RAG models?",
+      "expected_pages": [
+        3
+      ],
+      "evidence": "BART-large, 400M parameters (Sec 2.3)"
+    },
+    {
+      "index": 2,
+      "paper_id": "2005.11401",
+      "question": "How do the RAG models handle the training of the retriever and generator components, particularly regarding direct supervision and updates to the document index?",
+      "expected_pages": [
+        3,
+        4
+      ],
+      "evidence": "no direct supervision (p3); document encoder + index kept fixed, query encoder + BART fine-tuned (p4)"
+    },
+    {
+      "index": 3,
+      "paper_id": "2005.11401",
+      "question": "According to the paper, what are the primary performance benefits of RAG models on knowledge-intensive NLP tasks compared to parametric-only seq2seq models and retrieve-and-extract architectures?",
+      "expected_pages": [
+        1
+      ],
+      "evidence": "abstract: SOTA on open-domain QA; more specific, diverse and factual"
+    },
+    {
+      "index": 4,
+      "paper_id": "2005.11401",
+      "question": "What is the key conceptual difference between the RAG-Sequence and RAG-Token models concerning how they use retrieved documents during generation?",
+      "expected_pages": [
+        3
+      ],
+      "evidence": "Sec 2.1: RAG-Sequence same document vs RAG-Token different latent document per token"
+    },
+    {
+      "index": 5,
+      "paper_id": "2312.10997",
+      "question": "What are the three stages into which the RAG research paradigm is categorized in this survey?",
+      "expected_pages": [
+        1,
+        2,
+        4
+      ],
+      "evidence": "abstract; 'categorize it into three stages' (p2); Fig. 3 caption (p4)"
+    },
+    {
+      "index": 6,
+      "paper_id": "2312.10997",
+      "question": "Detail the three fundamental steps involved in the Naive RAG process.",
+      "expected_pages": [
+        3
+      ],
+      "evidence": "Sec II.A: indexing / retrieval / generation details"
+    },
+    {
+      "index": 7,
+      "paper_id": "2312.10997",
+      "question": "Summarize the primary challenges faced by Naive RAG across its retrieval, generation, and augmentation phases.",
+      "expected_pages": [
+        3
+      ],
+      "evidence": "Sec II.A: retrieval challenges, generation difficulties, augmentation hurdles"
+    },
+    {
+      "index": 8,
+      "paper_id": "2312.10997",
+      "question": "What is the definition of 'hallucination' as it relates to Large Language Models in the context of this paper?",
+      "expected_pages": [
+        1,
+        3
+      ],
+      "evidence": "hallucination beyond training data (p1 intro); not supported by retrieved context (p3)"
+    },
+    {
+      "index": 9,
+      "paper_id": "2310.11511",
+      "question": "What parameter sizes were primarily used for the Self-RAG models evaluated in the paper?",
+      "expected_pages": [
+        1
+      ],
+      "evidence": "abstract: Self-RAG (7B and 13B parameters)"
+    },
+    {
+      "index": 10,
+      "paper_id": "2310.11511",
+      "question": "Describe the three main steps of the Self-Reflective Retrieval-Augmented Generation (Self-RAG) process as detailed in the introduction.",
+      "expected_pages": [
+        1
+      ],
+      "evidence": "intro: steps 1-3 (retrieval token, parallel passages, critique tokens)"
+    },
+    {
+      "index": 11,
+      "paper_id": "2310.11511",
+      "question": "According to the paper, how does Self-RAG's performance compare to state-of-the-art LLMs and retrieval-augmented models, and what key generation quality aspects does it specifically improve?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "abstract (p1) and intro (p2): outperforms ChatGPT / Llama2-chat"
+    },
+    {
+      "index": 12,
+      "paper_id": "2310.11511",
+      "question": "What are \"reflection tokens\" in the Self-RAG framework, and what are their two main categories?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "reflection tokens = retrieval + critique tokens (p1); definition continued (p2)"
+    },
+    {
+      "index": 13,
+      "paper_id": "2401.15884",
+      "question": "What is the mathematical formulation presented in the paper for the RAG framework?",
+      "expected_pages": [
+        3
+      ],
+      "evidence": "Sec 3 Task Formulation: P(Y|X) = P(D|X)P(Y,D|X), eq. (1)"
+    },
+    {
+      "index": 14,
+      "paper_id": "2401.15884",
+      "question": "What specific knowledge retrieval actions can be triggered by the confidence degree from CRAG's retrieval evaluator, and what is done for some of these actions?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "abstract (p1); {Correct, Incorrect, Ambiguous} + web search (p2)"
+    },
+    {
+      "index": 15,
+      "paper_id": "2401.15884",
+      "question": "On what types of tasks and datasets was CRAG evaluated, and what were the general findings regarding its performance compared to other RAG approaches?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "abstract: four datasets (p1); PopQA, Biography, PubHealth, Arc-Challenge (p2)"
+    },
+    {
+      "index": 16,
+      "paper_id": "2401.15884",
+      "question": "What is the primary function of the \"decompose-then-recompose algorithm\" in CRAG?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "decompose-then-recompose described in abstract (p1) and intro (p2)"
+    },
+    {
+      "index": 17,
+      "paper_id": "2210.03629",
+      "question": "How many in-context examples does ReAct typically require to achieve its reported performance advantages on interactive decision-making benchmarks like ALFWorld and WebShop?",
+      "expected_pages": [
+        1
+      ],
+      "evidence": "abstract: only one or two in-context examples"
+    },
+    {
+      "index": 18,
+      "paper_id": "2210.03629",
+      "question": "What is the core methodology of the ReAct paradigm for task solving with language models?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "abstract (p1); intro: interleaved reasoning traces and actions (p2)"
+    },
+    {
+      "index": 19,
+      "paper_id": "2210.03629",
+      "question": "Summarize the primary benefits and performance gains of ReAct compared to baseline methods like Chain-of-Thought (CoT) and Act-only approaches, across the evaluated benchmarks.",
+      "expected_pages": [
+        1,
+        3
+      ],
+      "evidence": "abstract (p1); contributions: 34% / 10% (p3)"
+    },
+    {
+      "index": 20,
+      "paper_id": "2210.03629",
+      "question": "What core abilities does the ReAct paradigm aim to synergize within language models?",
+      "expected_pages": [
+        1,
+        2,
+        3
+      ],
+      "evidence": "synergy of reasoning and acting: abstract (p1), intro (p2), contributions (p3)"
+    },
+    {
+      "index": 21,
+      "paper_id": "2307.03172",
+      "question": "How does the memory and compute requirement of Transformer-based language models scale with sequence length?",
+      "expected_pages": [
+        1
+      ],
+      "evidence": "intro: memory/compute quadratic in sequence length"
+    },
+    {
+      "index": 22,
+      "paper_id": "2307.03172",
+      "question": "In the multi-document question answering task, how did the authors control the input context length and the position of the relevant information?",
+      "expected_pages": [
+        2
+      ],
+      "evidence": "intro: vary number of documents and position of the relevant document"
+    },
+    {
+      "index": 23,
+      "paper_id": "2307.03172",
+      "question": "What is the primary finding regarding how language models use long contexts, and what trade-off does it highlight for prompting LMs with extensive information?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "Fig. 1 caption (p1); U-shaped curve + trade-off (p2)"
+    },
+    {
+      "index": 24,
+      "paper_id": "2307.03172",
+      "question": "The paper identifies 'primacy bias' and 'recency bias' in language models' use of long contexts. What do these terms refer to in this context?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "primacy / recency bias: Fig. 1 caption (p1), intro (p2)"
+    },
+    {
+      "index": 25,
+      "paper_id": "2309.15217",
+      "question": "How is the final faithfulness score (F) computed in the Ragas framework, based on the verified statements from the generated answer and the retrieved context?",
+      "expected_pages": [
+        3
+      ],
+      "evidence": "Sec 3: F = |V| / |S|"
+    },
+    {
+      "index": 26,
+      "paper_id": "2309.15217",
+      "question": "What are the two main steps involved in estimating the 'Faithfulness' metric within the Ragas framework?",
+      "expected_pages": [
+        3
+      ],
+      "evidence": "Sec 3: extract statements, then verify each against context"
+    },
+    {
+      "index": 27,
+      "paper_id": "2309.15217",
+      "question": "What core limitations of existing language models and their traditional evaluation methods does the Ragas framework aim to address for Retrieval Augmented Generation (RAG) systems?",
+      "expected_pages": [
+        1
+      ],
+      "evidence": "intro: perplexity not predictive; inaccessible for closed models"
+    },
+    {
+      "index": 28,
+      "paper_id": "2309.15217",
+      "question": "According to the Ragas paper, what does 'Context Relevance' refer to in the evaluation of Retrieval Augmented Generation (RAG) systems?",
+      "expected_pages": [
+        3
+      ],
+      "evidence": "Sec 3: Context Relevance definition"
+    },
+    {
+      "index": 29,
+      "paper_id": "2106.09685",
+      "question": "According to the LoRA paper, for GPT-3 175B, what is an example of a sufficiently low rank (r) for LoRA modules compared to the full rank (d)?",
+      "expected_pages": [
+        2
+      ],
+      "evidence": "intro: r of one or two suffices when d = 12,288"
+    },
+    {
+      "index": 30,
+      "paper_id": "2106.09685",
+      "question": "How does LoRA initialize its low-rank matrices A and B, and what is its strategy for handling the pre-trained weights during adaptation?",
+      "expected_pages": [
+        4
+      ],
+      "evidence": "Sec 4.1: random Gaussian init for A, zero for B; W0 frozen"
+    },
+    {
+      "index": 31,
+      "paper_id": "2106.09685",
+      "question": "What are the primary efficiency and performance advantages of LoRA compared to full fine-tuning and prior parameter-efficient adaptation methods like adapters?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "abstract: 10,000x params, 3x memory, no added latency (p1); key advantages (p2)"
+    },
+    {
+      "index": 32,
+      "paper_id": "2106.09685",
+      "question": "What is the core concept of Low-Rank Adaptation (LoRA) as introduced in the paper?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "abstract (p1) and intro (p2): frozen weights + rank decomposition matrices"
+    },
+    {
+      "index": 33,
+      "paper_id": "2205.14135",
+      "question": "What is the IO complexity of FlashAttention in terms of HBM accesses, as compared to standard attention?",
+      "expected_pages": [
+        2,
+        6
+      ],
+      "evidence": "O(N^2 d^2 / M) vs Omega(Nd + N^2): intro (p2), Theorem 2 (p6)"
+    },
+    {
+      "index": 34,
+      "paper_id": "2205.14135",
+      "question": "How does FlashAttention address the challenge of not storing the large intermediate attention matrix for the backward pass?",
+      "expected_pages": [
+        2
+      ],
+      "evidence": "intro: store softmax normalization factor, recompute attention on-chip"
+    },
+    {
+      "index": 35,
+      "paper_id": "2205.14135",
+      "question": "Summarize the key empirical benefits of FlashAttention in terms of model training speed and quality improvements for Transformers.",
+      "expected_pages": [
+        1,
+        3
+      ],
+      "evidence": "abstract (p1); contributions list (p3)"
+    },
+    {
+      "index": 36,
+      "paper_id": "2205.14135",
+      "question": "According to the paper, what is the 'missing principle' that FlashAttention addresses by being 'IO-aware'?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "missing principle: IO-aware attention, abstract (p1) and intro (p2)"
+    },
+    {
+      "index": 37,
+      "paper_id": "2004.04906",
+      "question": "What is the dimensionality of the vectors produced by the encoders in DPR, and what type of neural network is used for these encoders?",
+      "expected_pages": [
+        3
+      ],
+      "evidence": "Sec 3.1: two BERT-base encoders, d = 768"
+    },
+    {
+      "index": 38,
+      "paper_id": "2004.04906",
+      "question": "How does DPR handle the selection of negative passages during training, and what is the objective function used?",
+      "expected_pages": [
+        3
+      ],
+      "evidence": "Sec 3.2: n negative passages, negative log likelihood loss"
+    },
+    {
+      "index": 39,
+      "paper_id": "2004.04906",
+      "question": "What are the main advantages and performance improvements of DPR compared to traditional sparse retrieval methods like BM25 and previous dense retrieval approaches like ORQA?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "abstract: 9%-19% over BM25 (p1); 65.2 vs 42.9 top-5, 41.5 vs 33.3 vs ORQA (p2)"
+    },
+    {
+      "index": 40,
+      "paper_id": "2004.04906",
+      "question": "What is \"Dense Passage Retrieval\" (DPR) as defined in this paper's context, and how does it contrast with traditional sparse retrieval?",
+      "expected_pages": [
+        1,
+        2
+      ],
+      "evidence": "abstract: dense dual-encoder vs sparse TF-IDF/BM25 (p1); intro (p2)"
+    }
+  ]
+}
