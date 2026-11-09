@@ -270,6 +270,13 @@ Each result is a LangChain `Document`: `page_content` holds the chunk text and
 `metadata` holds `chunk_id`, `paper_id`, `paper_title`, `page_start`, `page_end`,
 `similarity`, and `rerank_score` (when reranking is on).
 
+With reranking on, the cross-encoder re-scores the top 40 candidates by
+default (`rerank_pool=40`; `--rerank-pool` in `scripts/ask.py`). That found
+the answer page more often than 20 in the November ground-truth eval, but it
+is slower: roughly 2.9 s of reranking per question on a laptop CPU, vs 1.4 s
+with 20. Lower it if speed matters more. Details:
+`data/eval/retrieval_tuning_report.md`.
+
 ### 6. Ask questions (baseline RAG)
 
 `src/rag.py` answers a question from the retrieved excerpts only, citing them

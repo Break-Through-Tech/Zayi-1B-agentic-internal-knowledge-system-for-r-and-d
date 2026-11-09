@@ -45,7 +45,7 @@ def main():
     parser.add_argument("--k", type=int, default=5, help="excerpts to retrieve")
     parser.add_argument("--no-rerank", action="store_true", help="skip cross-encoder reranking")
     parser.add_argument(
-        "--rerank-pool", type=int, help="candidates to rerank (default max(4k, 16); larger = slower)"
+        "--rerank-pool", type=int, help="candidates to rerank (default 40; larger = slower)"
     )
     parser.add_argument("--provider", choices=PROVIDERS, help="default: LLM_PROVIDER or gemini")
     parser.add_argument("--model", help="model name (default from .env / provider default)")

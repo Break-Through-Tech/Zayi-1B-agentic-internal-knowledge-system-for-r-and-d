@@ -43,7 +43,7 @@ CONFIGS = [
     ChunkingConfig(chunk_size=512, chunk_overlap=64, scope="page"),  # October default
 ]
 # None = embedding similarity only (October eval); ints = rerank that many
-# candidates. 20 is what the app uses today (k=5 -> max(4k, 16)).
+# candidates. 20 was the app default before 2026-11-09; the app now uses 40.
 RERANK_POOLS = [None, 20, 40, 80]
 KS = (1, 3, 5, 10)
 

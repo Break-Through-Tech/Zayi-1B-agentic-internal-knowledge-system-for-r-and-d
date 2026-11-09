@@ -97,6 +97,17 @@ def test_rerank_pool_is_passed_to_search(collection, monkeypatch):
     assert seen == [2]
 
 
+
+def test_default_rerank_pool_is_40_or_k_if_larger(collection, monkeypatch):
+    pools = []
+    monkeypatch.setattr(
+        retriever_module, "search", lambda *a, rerank_pool=None, **kw: pools.append(rerank_pool) or []
+    )
+    PaperRetriever(collection=collection, k=5).invoke("q")
+    PaperRetriever(collection=collection, k=50).invoke("q")  # pool must cover k
+    PaperRetriever(collection=collection, k=5, rerank_pool=20).invoke("q")  # explicit wins
+    assert pools == [40, 50, 20]
+
 def test_rerank_pool_smaller_than_k_fails_at_construction(collection):
     with pytest.raises(ValueError, match="rerank_pool"):
         PaperRetriever(collection=collection, k=5, rerank_pool=3)

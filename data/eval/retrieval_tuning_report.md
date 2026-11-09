@@ -22,8 +22,8 @@ more for small chunks (several per page).
 | Chunks | Rerank pool | p@1 | p@3 | p@5 | p@10 | paper@5 | Retrieval time / question |
 |---|---|---:|---:|---:|---:|---:|---:|
 | 512/64 | off (October eval) | 0.28 | 0.63 | 0.78 | 0.83 | 0.95 | ~0.01 s |
-| 512/64 | 20 (current app default) | 0.63 | 0.80 | 0.88 | 0.90 | 0.98 | ~1.4 s |
-| 512/64 | 40 | 0.58 | 0.83 | 0.90 | 0.95 | 0.98 | ~2.9 s |
+| 512/64 | 20 (app default before this task) | 0.63 | 0.80 | 0.88 | 0.90 | 0.98 | ~1.4 s |
+| 512/64 | 40 (new app default) | 0.58 | 0.83 | 0.90 | 0.95 | 0.98 | ~2.9 s |
 | 512/64 | 80 | 0.60 | 0.83 | 0.93 | 0.98 | 1.00 | ~8 s |
 | 384/48 | 40 | 0.55 | 0.78 | 0.88 | 0.93 | 0.98 | — |
 | 256/32 | 20 | 0.63 | 0.83 | 0.83 | 0.90 | 0.95 | — |
@@ -65,9 +65,16 @@ pool sizes with each other. Full table incl. all chunk sizes is in the JSON.)
 - **Q13 (CRAG formula)** — found only with pool 80.
 - **Q29 (LoRA rank r vs d=12,288)** — 4th with pool 20, 6th with pools 40/80.
 
+## Decision (2026-11-09)
+
+The app's default rerank pool is now **40** (`get_retriever()`,
+`scripts/ask.py`). Trade-off: retrieval takes ~2.9 s per question instead of
+~1.4 s with 20, on top of the Gemini call. Pass `rerank_pool=20` /
+`--rerank-pool 20` when speed matters more.
+
 ## Suggested next steps
 
-- Pick the default pool (40 is the middle ground) and use the app's retriever
-  settings in the Task 5 final evaluation.
+- Use the app's retriever settings (rerank on, pool 40) in the Task 5 final
+  evaluation.
 - Try a hybrid keyword + embedding retriever (BM25 + dense) for exact-term
   questions like Q13/Q29.

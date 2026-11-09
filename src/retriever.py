@@ -39,6 +39,12 @@ DEFAULT_CHROMA_PATH = Path(__file__).resolve().parent.parent / "chroma"
 # the September sweep; k=5 gives the generator a few corroborating excerpts.
 DEFAULT_K = 5
 DEFAULT_RERANK = True
+# Candidates the cross-encoder re-scores (raised to k when k is larger).
+# Chosen 2026-11-09 from the ground-truth eval: 40 finds the answer page in
+# the top 5 for 36/40 questions vs 35/40 with 20 — but it is SLOWER, about
+# 2.9 s of reranking per question on a laptop CPU vs 1.4 s with 20.
+# See data/eval/retrieval_tuning_report.md.
+DEFAULT_RERANK_POOL = 40
 
 
 def row_to_document(row):
@@ -54,7 +60,7 @@ class PaperRetriever(BaseRetriever):
     collection: Any
     k: int = Field(default=DEFAULT_K, ge=1)
     rerank: bool = DEFAULT_RERANK
-    rerank_pool: int | None = Field(default=None, ge=1)  # None: search() default, max(4k, 16)
+    rerank_pool: int | None = Field(default=None, ge=1)  # None: max(DEFAULT_RERANK_POOL, k)
     model_name: str = DEFAULT_MODEL
     where: dict | None = None  # optional Chroma metadata filter, e.g. {"paper_id": "2106.09685"}
 
@@ -74,7 +80,7 @@ class PaperRetriever(BaseRetriever):
             model_name=self.model_name,
             where=self.where or None,  # chroma rejects an empty filter {}
             rerank=self.rerank,
-            rerank_pool=self.rerank_pool,
+            rerank_pool=self.rerank_pool or max(DEFAULT_RERANK_POOL, self.k),
         )
         return [row_to_document(row) for row in rows]
 
