@@ -18,7 +18,7 @@ import chromadb.errors
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from src.chunking import ChunkingConfig, build_chunks
 from src.cleaning import clean_pages
@@ -57,6 +57,12 @@ class PaperRetriever(BaseRetriever):
     rerank_pool: int | None = Field(default=None, ge=1)  # None: search() default, max(4k, 16)
     model_name: str = DEFAULT_MODEL
     where: dict | None = None  # optional Chroma metadata filter, e.g. {"paper_id": "2106.09685"}
+
+    @model_validator(mode="after")
+    def _pool_covers_k(self):
+        if self.rerank and self.rerank_pool is not None and self.rerank_pool < self.k:
+            raise ValueError(f"rerank_pool ({self.rerank_pool}) must be >= k ({self.k})")
+        return self
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun

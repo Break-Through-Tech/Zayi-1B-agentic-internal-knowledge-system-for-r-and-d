@@ -42,35 +42,33 @@ def _get_ranker(model_name=DEFAULT_RERANKER):
 # FlashRank caches its model in /tmp by default, which macOS empties every
 # few days — files go, the folder stays, and FlashRank (which only checks
 # that the folder exists) skips the download and crashes with NoSuchFile.
-# Keep the model in a persistent per-user cache instead.
+# Keep the model in a persistent per-user cache instead, and if loading
+# still fails (emptied, partial or corrupt download), delete the model
+# folder and let FlashRank download it again — once.
 RERANKER_CACHE_DIR = Path.home() / ".cache" / "flashrank"
-_RERANKER_FILES = (  # everything FlashRank opens, besides the model weights
-    "config.json",
-    "tokenizer.json",
-    "tokenizer_config.json",
-    "special_tokens_map.json",
-)
 
 
-def _repair_reranker_cache(cache_dir, model_name, model_file):
-    """Delete a partial/emptied model folder so FlashRank re-downloads it."""
-    model_dir = Path(cache_dir) / model_name
-    required = (model_file, *_RERANKER_FILES)
-    if model_dir.is_dir() and not all((model_dir / f).is_file() for f in required):
+def _load_ranker_with_repair(ranker_cls, model_name, cache_dir):
+    def load():
+        return ranker_cls(
+            model_name=model_name, cache_dir=str(cache_dir), max_length=_RERANKER_MAX_LENGTH
+        )
+
+    try:
+        return load()
+    except Exception:
+        model_dir = Path(cache_dir) / model_name
+        if not model_dir.is_dir():
+            raise  # nothing cached to repair (e.g. no network on first download)
         shutil.rmtree(model_dir)
+        return load()
 
 
 @lru_cache(maxsize=2)
 def _load_ranker(model_name):
     from flashrank import Ranker
-    from flashrank.Config import model_file_map
 
-    _repair_reranker_cache(RERANKER_CACHE_DIR, model_name, model_file_map[model_name])
-    return Ranker(
-        model_name=model_name,
-        cache_dir=str(RERANKER_CACHE_DIR),
-        max_length=_RERANKER_MAX_LENGTH,
-    )
+    return _load_ranker_with_repair(Ranker, model_name, RERANKER_CACHE_DIR)
 
 
 def _corpus_hash(chunks):
@@ -213,7 +211,7 @@ def search(
     `rerank_score` and are ordered by it."""
     if k < 1:
         raise ValueError(f"k must be >= 1, got {k}")
-    if rerank_pool is not None and rerank_pool < k:
+    if rerank and rerank_pool is not None and rerank_pool < k:
         raise ValueError(f"rerank_pool ({rerank_pool}) must be >= k ({k})")
     _require_cosine(collection)
     built_with = (collection.metadata or {}).get("embedding_model")

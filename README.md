@@ -296,6 +296,8 @@ result = answer_question("How does Self-RAG decide when to retrieve?")
 print(result["answer"])
 for s in result["sources"]:
     print(s["n"], s["paper_title"], s["page_start"], s["page_end"])
+if not result["citations"]["valid"]:  # answer cited an [S#] that wasn't retrieved
+    print("invalid citations:", result["citations"]["invalid_sources"])
 ```
 
 ### 7. Run the evaluation sweep

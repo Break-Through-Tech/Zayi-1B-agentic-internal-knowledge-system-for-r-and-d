@@ -97,6 +97,12 @@ def test_rerank_pool_is_passed_to_search(collection, monkeypatch):
     assert seen == [2]
 
 
+def test_rerank_pool_smaller_than_k_fails_at_construction(collection):
+    with pytest.raises(ValueError, match="rerank_pool"):
+        PaperRetriever(collection=collection, k=5, rerank_pool=3)
+    PaperRetriever(collection=collection, k=5, rerank=False, rerank_pool=3)  # unused: fine
+
+
 def test_where_filter_restricts_papers(collection):
     docs = PaperRetriever(
         collection=collection, k=5, rerank=False, where={"paper_id": "optim"}

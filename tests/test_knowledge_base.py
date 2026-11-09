@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import chromadb
 import numpy as np
 import pytest
@@ -222,38 +224,51 @@ def test_metadata_filter(chunks, client):
     assert results and all(r["paper_id"] == "optim" for r in results)
 
 
-def test_reranker_cache_repair_drops_emptied_or_partial_model_dirs(tmp_path):
+
+class _FlakyRanker:
+    """Stands in for flashrank.Ranker: fails `failures` times, then loads."""
+
+    def __init__(self, failures):
+        self.failures, self.calls = failures, []
+
+    def __call__(self, model_name, cache_dir, max_length):
+        self.calls.append(model_name)
+        if len(self.calls) <= self.failures:
+            raise RuntimeError("NO_SUCHFILE: model.onnx")
+        return "ranker"
+
+
+def test_reranker_load_repairs_a_broken_cache_once(tmp_path):
     # regression: macOS emptied FlashRank's /tmp model folder; FlashRank only
     # checks the folder exists, so it skipped the download and crashed
-    from src.knowledge_base import _RERANKER_FILES, _repair_reranker_cache
+    from src.knowledge_base import _load_ranker_with_repair
 
-    model, weights = "some-ranker", "model.onnx"
-    emptied = tmp_path / model
-    emptied.mkdir()
-    _repair_reranker_cache(tmp_path, model, weights)
-    assert not emptied.exists()
+    (tmp_path / "some-ranker").mkdir()  # emptied / partial download
+    ranker = _FlakyRanker(failures=1)
+    assert _load_ranker_with_repair(ranker, "some-ranker", tmp_path) == "ranker"
+    assert len(ranker.calls) == 2 and not (tmp_path / "some-ranker").exists()
 
-    partial = tmp_path / model
-    partial.mkdir()
-    (partial / weights).write_bytes(b"x")  # tokenizer files missing
-    _repair_reranker_cache(tmp_path, model, weights)
-    assert not partial.exists()
+    (tmp_path / "some-ranker").mkdir()
+    with pytest.raises(RuntimeError):  # still broken after one re-download: give up
+        _load_ranker_with_repair(_FlakyRanker(failures=2), "some-ranker", tmp_path)
 
-    complete = tmp_path / model
-    complete.mkdir()
-    for name in (weights, *_RERANKER_FILES):
-        (complete / name).write_text("{}")
-    _repair_reranker_cache(tmp_path, model, weights)
-    assert complete.exists() and len(list(complete.iterdir())) == 5
+    never = _FlakyRanker(failures=1)  # nothing cached (e.g. offline): no retry
+    with pytest.raises(RuntimeError):
+        _load_ranker_with_repair(never, "other-ranker", tmp_path)
+    assert len(never.calls) == 1
 
-    _repair_reranker_cache(tmp_path, "never-downloaded", weights)  # no-op
+    healthy = _FlakyRanker(failures=0)
+    assert _load_ranker_with_repair(healthy, "some-ranker", tmp_path) == "ranker"
+    assert len(healthy.calls) == 1
 
 
-def test_reranker_uses_a_persistent_cache_not_tmp():
+def test_reranker_cache_is_not_flashranks_tmp_default():
+    from flashrank.Config import default_cache_dir
+
     from src.knowledge_base import RERANKER_CACHE_DIR
 
-    assert not str(RERANKER_CACHE_DIR).startswith(("/tmp", "/private/tmp"))
-
+    assert RERANKER_CACHE_DIR != Path(default_cache_dir)
+    assert Path.home() in RERANKER_CACHE_DIR.parents
 
 def test_rerank_pool_sets_candidate_count(chunks, client, monkeypatch):
     import src.knowledge_base as kb
@@ -269,3 +284,4 @@ def test_rerank_pool_sets_candidate_count(chunks, client, monkeypatch):
     assert seen == [min(16, total), 3]
     with pytest.raises(ValueError, match="rerank_pool"):
         search(collection, "castles", k=3, rerank=True, rerank_pool=2)
+    assert search(collection, "castles", k=3, rerank=False, rerank_pool=2)  # unused: no error

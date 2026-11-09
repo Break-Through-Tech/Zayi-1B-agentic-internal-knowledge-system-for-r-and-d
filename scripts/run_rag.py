@@ -15,6 +15,8 @@ result = answer_question("How does LoRA reduce trainable parameters?")
 
 print("ANSWER:")
 print(result["answer"])
+if not result["citations"]["valid"]:
+    print(f"\nwarning: answer cites missing sources {result['citations']['invalid_sources']}")
 
 print("\nSOURCES:")
 for source in result["sources"]:

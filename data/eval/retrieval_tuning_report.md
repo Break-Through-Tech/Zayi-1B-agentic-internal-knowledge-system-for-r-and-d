@@ -10,8 +10,10 @@ the right paper is often retrieved without the passage that holds the answer.
 
 We added page labels for all 40 ground-truth questions
 (`ground_truth_pages.json`: the page(s) whose text contains the evidence for
-each reference answer, with a note per question). A **page hit** means the
-retrieved chunk actually contains the answer.
+each reference answer, with a note per question). A **page hit** means a
+chunk from one of those pages was retrieved. That is an upper bound — it does
+not check that the chunk itself holds the answer text, which matters slightly
+more for small chunks (several per page).
 
 ## Results (40 questions)
 
@@ -26,7 +28,10 @@ retrieved chunk actually contains the answer.
 | 384/48 | 40 | 0.55 | 0.78 | 0.88 | 0.93 | 0.98 | — |
 | 256/32 | 20 | 0.63 | 0.83 | 0.83 | 0.90 | 0.95 | — |
 
-(Times measured on a laptop CPU; full table incl. all chunk sizes in the JSON.)
+(Times: re-measured separately on a laptop CPU, 10 questions, models already
+loaded. The `seconds_per_query` values in the JSON are higher (2.2 / 4.1 /
+9.3 s) because that sweep ran alongside other jobs — use them only to compare
+pool sizes with each other. Full table incl. all chunk sizes is in the JSON.)
 
 ## Findings
 

@@ -22,7 +22,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
-from langchain_google_genai.chat_models import GoogleModelNotFoundError
 
 # Repo-root .env, resolved from this file so it works from any working dir.
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
@@ -192,17 +191,30 @@ def _check_question(question):
     return question.strip()
 
 
+RETRYABLE_STATUS = (429, 500, 502, 503, 504)
+
+
+def _http_status(error):
+    """HTTP status of an API error, looking through wrapper exceptions.
+
+    langchain-google-genai re-raises Gemini's 429 as GoogleRateLimitError,
+    which carries no status itself — the original google.genai error (with
+    `.code`) is its `__cause__`. OpenAI-style clients use `.status_code`."""
+    seen = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        for attr in ("status_code", "code"):
+            status = getattr(error, attr, None)
+            if isinstance(status, int):
+                return status
+        error = error.__cause__ or error.__context__
+    return None
+
+
 def is_retryable_error(error):
-    """Retry temporary API errors, not permanent configuration errors."""
-    if isinstance(error, GoogleModelNotFoundError):
-        return False
-
-    status = getattr(error, "status_code", None)
-
-    if status is None:
-        status = getattr(error, "code", None)
-
-    return status in (429, 500, 502, 503, 504)
+    """Retry rate limits and transient server errors; never retry permanent
+    errors such as a bad key (401/403) or an unknown model (404)."""
+    return _http_status(error) in RETRYABLE_STATUS
 
 
 @retry(
@@ -216,11 +228,17 @@ def invoke_with_retry(generate, inputs, config):
     return generate.invoke(inputs, config=config)
 
 
+# A bracket group of source labels: [S2], [S1, S3], [S1; S2], [S1-S3].
+# Must start with S<n>, so the papers' own references like [12] never match.
+_CITATION_GROUP = re.compile(r"\[\s*S\d+(?:\s*[,;\-–]\s*S?\d+)*\s*\]")
+
+
 def validate_citations(answer, sources):
     """Check that cited source labels exist in the retrieved sources."""
     cited_numbers = {
         int(number)
-        for number in re.findall(r"\[S(\d+)\]", answer)
+        for group in _CITATION_GROUP.findall(answer)
+        for number in re.findall(r"\d+", group)
     }
 
     valid_numbers = {source["n"] for source in sources}

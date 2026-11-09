@@ -3,8 +3,10 @@
 Joins data/ground_truth_qa.json with the page labels in
 data/eval/ground_truth_pages.json and measures, per chunking config and
 rerank setting, paper-level and page-level hit@k and MRR. Page-level is the
-one that matters: a page hit means the chunk holding the answer was
-retrieved, not just some chunk of the right paper.
+one that matters: a page hit means a chunk from a page that contains the
+answer evidence was retrieved, not just some chunk of the right paper. (It
+does not check that the chunk itself holds the answer, so it is an upper
+bound — slightly looser for small chunks, which split a page into several.)
 
 No LLM calls — free to run. Results go to data/eval/gt_retrieval_results.json.
 
@@ -26,11 +28,10 @@ hf_logging.set_verbosity_error()
 
 import chromadb
 
-from src.chunking import ChunkingConfig, build_chunks
-from src.cleaning import clean_pages
-from src.data_io import DEFAULT_DATA_PATH, load_pages
-from src.knowledge_base import build_knowledge_base
+from src.chunking import ChunkingConfig
+from src.data_io import DEFAULT_DATA_PATH
 from src.retrieval_eval import evaluate_retrieval
+from src.retriever import load_knowledge_base
 
 GT_PATH = REPO / "data" / "ground_truth_qa.json"
 PAGES_PATH = REPO / "data" / "eval" / "ground_truth_pages.json"
@@ -68,7 +69,6 @@ def load_examples():
 
 def main():
     examples = load_examples()
-    cleaned = clean_pages(load_pages())
     client = chromadb.PersistentClient(path=str(REPO / "chroma"))
 
     rows = []
@@ -76,8 +76,8 @@ def main():
     print(f"{len(examples)} questions | source: {DEFAULT_DATA_PATH.name}")
     print(f"{'config':<12}{'chunks':>7}{'rerank':>8}{header}{'p_mrr':>7}{'s/q':>6}")
     for config in CONFIGS:
-        chunks = build_chunks(cleaned, config)
-        collection = build_knowledge_base(chunks, client=client)
+        collection = load_knowledge_base(config, client=client)  # re-embeds only if stale
+        n_chunks = collection.count()
         label = f"{config.chunk_size}/{config.chunk_overlap}"
         for pool in RERANK_POOLS:
             start = time.perf_counter()
@@ -87,7 +87,7 @@ def main():
             per_query = (time.perf_counter() - start) / len(examples)
             depth = max(KS)
             print(
-                f"{label:<12}{len(chunks):>7}{str(pool or 'off'):>8}"
+                f"{label:<12}{n_chunks:>7}{str(pool or 'off'):>8}"
                 + "".join(f"{report[f'page_hit@{k}']:>7}" for k in KS)
                 + "".join(f"{report[f'hit@{k}']:>9}" for k in (1, 5))
                 + f"{report[f'page_mrr@{depth}']:>7}{per_query:>6.2f}"
@@ -97,7 +97,7 @@ def main():
                     "chunk_size": config.chunk_size,
                     "chunk_overlap": config.chunk_overlap,
                     "scope": config.scope,
-                    "n_chunks": len(chunks),
+                    "n_chunks": n_chunks,
                     "rerank_pool": pool,
                     "seconds_per_query": round(per_query, 3),
                     **{

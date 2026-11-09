@@ -79,3 +79,18 @@ def test_source_metadata_is_preserved():
 def test_empty_documents_return_empty_sources():
     assert sources_from([]) == []
     assert format_context([]) == ""
+
+
+def test_grouped_citations_are_checked():
+    # regression: "[S1, S9]" matched nothing, so a bad label passed as valid
+    sources = [{"n": 1}, {"n": 2}]
+    for answer in ("Claim [S1, S9].", "Claim [S1; S9].", "Claim [S1-S9].", "Claim [S1,9]."):
+        result = validate_citations(answer, sources)
+        assert result["valid"] is False, answer
+        assert result["invalid_sources"] == [9], answer
+    assert validate_citations("Claim [S1, S2].", sources)["cited_sources"] == [1, 2]
+
+
+def test_papers_own_reference_numbers_are_not_citations():
+    result = validate_citations("BART [32] and DPR [12, 13] as cited in [S2].", [{"n": 1}, {"n": 2}])
+    assert result == {"valid": True, "cited_sources": [2], "invalid_sources": []}
