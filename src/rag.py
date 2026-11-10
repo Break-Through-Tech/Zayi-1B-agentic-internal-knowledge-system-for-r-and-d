@@ -211,10 +211,26 @@ def _http_status(error):
     return None
 
 
+def is_daily_quota_error(error):
+    """True for a 429 caused by an exhausted per-day quota (e.g. Gemini's
+    free tier, quota id `GenerateRequestsPerDayPerProjectPerModel-FreeTier`).
+    Unlike a per-minute rate limit it won't clear within the retry window."""
+    if _http_status(error) != 429:
+        return False
+    seen = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        if "PerDay" in str(error):
+            return True
+        error = error.__cause__ or error.__context__
+    return False
+
+
 def is_retryable_error(error):
     """Retry rate limits and transient server errors; never retry permanent
-    errors such as a bad key (401/403) or an unknown model (404)."""
-    return _http_status(error) in RETRYABLE_STATUS
+    errors such as a bad key (401/403), an unknown model (404) or a used-up
+    daily quota."""
+    return _http_status(error) in RETRYABLE_STATUS and not is_daily_quota_error(error)
 
 
 @retry(
@@ -230,24 +246,56 @@ def invoke_with_retry(generate, inputs, config):
 
 # A bracket group of source labels: [S2], [S1, S3], [S1; S2], [S1-S3].
 # Must start with S<n>, so the papers' own references like [12] never match.
-_CITATION_GROUP = re.compile(r"\[\s*S\d+(?:\s*[,;\-–]\s*S?\d+)*\s*\]")
+CITATION_GROUP = re.compile(r"\[\s*S\d+(?:\s*[,;\-–]\s*S?\d+)*\s*\]")
+
+
+_CITATION_RANGE = re.compile(r"(\d+)\s*[\-–]\s*S?(\d+)")
+
+
+def cited_numbers(group):
+    """Source numbers in one bracket group; a range [S1-S3] means 1, 2, 3."""
+    numbers = {int(n) for n in re.findall(r"\d+", group)}
+    for start, end in _CITATION_RANGE.findall(group):
+        if int(end) - int(start) <= 50:  # ignore absurd spans like [S1-S99999]
+            numbers.update(range(int(start), int(end) + 1))
+    return numbers
 
 
 def validate_citations(answer, sources):
     """Check that cited source labels exist in the retrieved sources."""
-    cited_numbers = {
-        int(number)
-        for group in _CITATION_GROUP.findall(answer)
-        for number in re.findall(r"\d+", group)
-    }
+    cited_numbers_ = set().union(*map(cited_numbers, CITATION_GROUP.findall(answer)))
 
     valid_numbers = {source["n"] for source in sources}
-    invalid_numbers = sorted(cited_numbers - valid_numbers)
+    invalid_numbers = sorted(cited_numbers_ - valid_numbers)
 
     return {
         "valid": len(invalid_numbers) == 0,
-        "cited_sources": sorted(cited_numbers),
+        "cited_sources": sorted(cited_numbers_),
         "invalid_sources": invalid_numbers,
+    }
+
+
+def _generator(llm):
+    """Prompt -> LLM -> text. The one definition both entry points use."""
+    return RAG_PROMPT | llm | StrOutputParser()
+
+
+def _generate_answer(generate, question, docs, config=None):
+    """Shared answer step: excerpts -> {"question", "answer", "sources", "citations"}."""
+    if not docs:
+        answer, sources = NO_CONTEXT_ANSWER, []
+    else:
+        answer = invoke_with_retry(
+            generate,
+            {"question": question, "context": format_context(docs)},
+            config,
+        )
+        sources = sources_from(docs)
+    return {
+        "question": question,
+        "answer": answer,
+        "sources": sources,
+        "citations": validate_citations(answer, sources),
     }
 
 
@@ -260,25 +308,10 @@ def build_rag_chain(retriever, llm):
 
     Retrieves once per question; if nothing is retrieved, returns
     NO_CONTEXT_ANSWER without calling the LLM."""
-    generate = RAG_PROMPT | llm | StrOutputParser()
+    generate = _generator(llm)
 
     def _answer(inputs, config):
-        question, docs = inputs["question"], inputs["docs"]
-        if not docs:
-            answer, sources = NO_CONTEXT_ANSWER, []
-        else:
-            answer = invoke_with_retry(
-                generate,
-                {"question": question, "context": format_context(docs)},
-                config,
-            )
-            sources = sources_from(docs)
-        return {
-            "question": question,
-            "answer": answer,
-            "sources": sources,
-            "citations": validate_citations(answer, sources),
-        }
+        return _generate_answer(generate, inputs["question"], inputs["docs"], config)
 
     chain = (
         RunnableLambda(_check_question)
@@ -286,6 +319,15 @@ def build_rag_chain(retriever, llm):
         | RunnableLambda(_answer)
     )
     return chain.with_config(run_name="rag_chain")
+
+
+def answer_from_docs(question, docs, llm, config=None):
+    """Answer from excerpts that were already retrieved — same prompt, retry
+    and citation check as `build_rag_chain`, without retrieving again. Lets a
+    caller (the Gradio app) show the sources before the LLM call finishes."""
+    question, docs = _check_question(question), list(docs)
+    generate = _generator(llm) if docs else None  # no excerpts -> no LLM needed
+    return _generate_answer(generate, question, docs, config)
 
 
 def answer_question(question, retriever=None, llm=None):

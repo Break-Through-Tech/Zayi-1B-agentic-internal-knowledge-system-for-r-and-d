@@ -84,11 +84,22 @@ def test_empty_documents_return_empty_sources():
 def test_grouped_citations_are_checked():
     # regression: "[S1, S9]" matched nothing, so a bad label passed as valid
     sources = [{"n": 1}, {"n": 2}]
-    for answer in ("Claim [S1, S9].", "Claim [S1; S9].", "Claim [S1-S9].", "Claim [S1,9]."):
+    for answer in ("Claim [S1, S9].", "Claim [S1; S9].", "Claim [S1,9]."):
         result = validate_citations(answer, sources)
         assert result["valid"] is False, answer
         assert result["invalid_sources"] == [9], answer
     assert validate_citations("Claim [S1, S2].", sources)["cited_sources"] == [1, 2]
+
+
+def test_citation_ranges_include_every_number():
+    # regression: [S1-S3] counted only 1 and 3, so S2 looked uncited and the
+    # middle of an out-of-range span was never checked
+    sources = [{"n": 1}, {"n": 2}, {"n": 3}]
+    assert validate_citations("Claim [S1-S3].", sources) == {
+        "valid": True, "cited_sources": [1, 2, 3], "invalid_sources": []
+    }
+    assert validate_citations("Claim [S2–5].", sources)["invalid_sources"] == [4, 5]
+    assert validate_citations("Claim [S1, S2-S3; S1].", sources)["cited_sources"] == [1, 2, 3]
 
 
 def test_papers_own_reference_numbers_are_not_citations():

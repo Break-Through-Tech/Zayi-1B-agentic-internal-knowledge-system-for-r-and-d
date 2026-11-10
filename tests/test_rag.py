@@ -13,6 +13,7 @@ from langchain_core.runnables import RunnableLambda
 from src import rag
 from src.rag import (
     NO_CONTEXT_ANSWER,
+    answer_from_docs,
     build_rag_chain,
     format_context,
     get_llm,
@@ -154,6 +155,23 @@ def test_empty_question_rejected(question):
     with pytest.raises(ValueError, match="non-empty"):
         chain.invoke(question)
     assert retriever.calls == [] and llm.prompts == []
+
+
+def test_answer_from_docs_matches_chain_without_retrieving():
+    chain, _, chain_llm = _chain()
+    llm = RecordingLLM()
+    result = answer_from_docs("  What does LoRA freeze?  ", DOCS, llm.runnable)
+    assert result == chain.invoke("What does LoRA freeze?")
+    assert llm.prompts == chain_llm.prompts  # identical prompt
+
+
+def test_answer_from_docs_no_docs_and_empty_question():
+    llm = RecordingLLM()
+    assert answer_from_docs("Q?", [], llm.runnable)["answer"] == NO_CONTEXT_ANSWER
+    assert answer_from_docs("Q?", [], None)["answer"] == NO_CONTEXT_ANSWER  # no LLM needed
+    with pytest.raises(ValueError, match="non-empty"):
+        answer_from_docs("  ", DOCS, llm.runnable)
+    assert llm.prompts == []
 
 
 @pytest.fixture()

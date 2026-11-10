@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import Mock, patch
 
 from google.genai.errors import ClientError
@@ -81,6 +82,30 @@ def test_real_gemini_rate_limit_is_retried():
     with patch.object(invoke_with_retry.retry, "sleep", return_value=None):
         assert invoke_with_retry(fake_generate, {}, None) == "ok"
     assert fake_generate.invoke.call_count == 2
+
+
+def test_daily_quota_is_not_retried():
+    # A used-up daily quota won't clear within the retry window; retrying only
+    # delays the error ~14 s. Message text as returned by Gemini (2026-10).
+    from src.rag import is_daily_quota_error, is_retryable_error
+
+    daily = ClientError(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "quota",
+        "details": [{"violations": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}})
+    try:
+        from langchain_google_genai.chat_models import _handle_client_error
+        _handle_client_error(daily, {"model": "m"})
+    except Exception as wrapped:
+        daily_wrapped = wrapped
+    per_minute = _wrapped(429)
+    assert is_daily_quota_error(daily_wrapped) and not is_retryable_error(daily_wrapped)
+    assert not is_daily_quota_error(per_minute) and is_retryable_error(per_minute)
+
+    fake_generate = Mock()
+    fake_generate.invoke.side_effect = daily_wrapped
+    with patch.object(invoke_with_retry.retry, "sleep", return_value=None):
+        with pytest.raises(type(daily_wrapped)):
+            invoke_with_retry(fake_generate, {}, None)
+    assert fake_generate.invoke.call_count == 1
 
 
 def test_openai_style_status_code_and_plain_errors():

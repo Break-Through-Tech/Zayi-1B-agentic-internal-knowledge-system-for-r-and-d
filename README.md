@@ -56,6 +56,7 @@ The current codebase contains the actual retrieval stack used for experimentatio
 - Sweep script to benchmark multiple chunking configurations
 - LangChain retriever over the knowledge base (`src/retriever.py`) returning Documents with citation metadata
 - Baseline RAG pipeline (`src/rag.py`): retrieved excerpts → grounded Gemini answer with [S1]-style citations, plus a CLI (`scripts/ask.py`)
+- Browser app (`src/ui.py`, `scripts/app.py`): Gradio UI for asking questions and checking each citation against its source excerpt
 
 ## Repository structure
 
@@ -84,6 +85,7 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   ├── 03_text_chunking.ipynb
 │   └── 04_knowledge_base.ipynb
 ├── scripts/
+│   ├── app.py
 │   ├── ask.py
 │   ├── run_retrieval_sweep.py
 │   └── test_reference_filtering.py
@@ -96,13 +98,15 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   ├── knowledge_base.py
 │   ├── rag.py
 │   ├── retrieval_eval.py
-│   └── retriever.py
+│   ├── retriever.py
+│   └── ui.py
 ├── tests/
 │   ├── test_chunking.py
 │   ├── test_cleaning.py
 │   ├── test_knowledge_base.py
 │   ├── test_rag.py
-│   └── test_retriever.py
+│   ├── test_retriever.py
+│   └── test_ui.py
 └── chroma/            # local vector store, generated at runtime
 ```
 
@@ -307,7 +311,26 @@ if not result["citations"]["valid"]:  # answer cited an [S#] that wasn't retriev
     print("invalid citations:", result["citations"]["invalid_sources"])
 ```
 
-### 7. Run the evaluation sweep
+### 7. Use the browser app
+
+A Gradio app for asking questions and reviewing answers. From the repo root:
+
+```bash
+python scripts/app.py   # opens http://127.0.0.1:7860
+```
+
+- **Ask** retrieves excerpts and has Gemini answer from them. Each [S1]-style
+  citation is a link to its source card, which shows the excerpt and links to
+  that page of the PDF. Sources the answer didn't use are dimmed, and a
+  citation that points to no retrieved source is flagged.
+- **Search only** shows the matching excerpts without calling Gemini, so it
+  needs no API key and doesn't use the daily quota (20 requests/day on the
+  free tier).
+- **Download as Markdown** saves the question, answer and source list.
+- Retrieval settings (number of excerpts, reranking) are under *Retrieval
+  settings*. Startup takes a few seconds while the models load.
+
+### 8. Run the evaluation sweep
 
 The script `scripts/run_retrieval_sweep.py` builds several chunking configurations, evaluates retrieval against the sample labeled query set, prints a summary table, and saves results to `data/eval/sweep_results.json`.
 
@@ -360,7 +383,7 @@ The repository document set references the following directions:
 1. Agentic self-correction with LangGraph
 2. Local reranking with FlashRank
 3. Deterministic evaluation using rule-based metrics
-4. Browser UI prototyping with Gradio
+4. Browser UI prototyping with Gradio (first version: `scripts/app.py`)
 
 The next milestone direction is to layer a baseline RAG pipeline on top of the working knowledge-base search layer, using Gemini or similar LLM APIs for final answer generation.
 
