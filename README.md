@@ -56,7 +56,7 @@ The current codebase contains the actual retrieval stack used for experimentatio
 - Sweep script to benchmark multiple chunking configurations
 - LangChain retriever over the knowledge base (`src/retriever.py`) returning Documents with citation metadata
 - Baseline RAG pipeline (`src/rag.py`): retrieved excerpts → grounded Gemini answer with [S1]-style citations, plus a CLI (`scripts/ask.py`)
-- Browser app (`src/ui.py`, `scripts/app.py`): Gradio UI for asking questions and checking each citation against its source excerpt
+- Browser app (`src/ui.py`, `scripts/app.py`): chat-style Gradio UI for asking questions and checking each citation against its source excerpt
 
 ## Repository structure
 
@@ -107,6 +107,8 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   ├── test_rag.py
 │   ├── test_retriever.py
 │   └── test_ui.py
+├── assets/
+│   └── favicon.svg
 └── chroma/            # local vector store, generated at runtime
 ```
 
@@ -313,22 +315,28 @@ if not result["citations"]["valid"]:  # answer cited an [S#] that wasn't retriev
 
 ### 7. Use the browser app
 
-A Gradio app for asking questions and reviewing answers. From the repo root:
+A chat-style Gradio app for asking questions and checking the answers. From
+the repo root:
 
 ```bash
 python scripts/app.py   # opens http://127.0.0.1:7860
 ```
 
-- **Ask** retrieves excerpts and has Gemini answer from them. Each [S1]-style
-  citation is a link to its source card, which shows the excerpt and links to
-  that page of the PDF. Sources the answer didn't use are dimmed, and a
-  citation that points to no retrieved source is flagged.
-- **Search only** shows the matching excerpts without calling Gemini, so it
+- **Answer** (the default mode) retrieves excerpts and has Gemini answer from
+  them. Each S1-style citation is a chip that jumps to its source card, which
+  shows the excerpt and links to that page of the PDF. Sources the answer
+  didn't use are dimmed, and a citation that points to no retrieved source is
+  flagged. The collapsible steps above each answer show what was retrieved
+  and how long each step took.
+- **Search only** shows the closest excerpts without calling Gemini, so it
   needs no API key and doesn't use the daily quota (20 requests/day on the
   free tier).
-- **Download as Markdown** saves the question, answer and source list.
-- Retrieval settings (number of excerpts, reranking) are under *Retrieval
-  settings*. Startup takes a few seconds while the models load.
+- **Download .md** under an answer saves the question, answer and source list.
+- The composer also sets the number of excerpts and turns reranking on or
+  off. Each question is answered on its own; earlier turns are not sent to
+  the model. **New chat** clears the page.
+- Startup takes a few seconds while the models load. Math in answers is
+  typeset with KaTeX from a CDN (it shows as plain TeX when offline).
 
 ### 8. Run the evaluation sweep
 

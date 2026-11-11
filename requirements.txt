@@ -16,6 +16,7 @@ tenacity>=9.0  # retry/backoff on transient LLM API errors
 
 # Browser app (November, Task 6)
 gradio>=6.31
+markdown-it-py>=3.0  # renders answers to HTML (also a Gradio dependency)
 
 # Notebooks & analysis (Tasks 2+)
 jupyter
