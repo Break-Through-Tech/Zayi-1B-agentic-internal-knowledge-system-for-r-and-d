@@ -41,7 +41,8 @@ from src.retriever import DEFAULT_K, DEFAULT_RERANK_POOL
 
 log = logging.getLogger(__name__)
 
-APP_TITLE = "Zayi Research Assistant"
+BRAND = "Zayi 1B"  # our team (Zayi is the host organization)
+APP_TITLE = f"{BRAND} Research Assistant"
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 LOGO = ASSETS / "logo.svg"  # also the tab icon
 # Green aurora over Snæfellsnes, Iceland — photo by Jack Anstey on Unsplash
@@ -400,7 +401,7 @@ def _steps(turn):
 
 def _memo_link(turn):
     words = re.findall(r"[a-z0-9]+", turn.question.lower())[:6]
-    name = "zayi-" + ("-".join(words) or f"answer-{turn.n}") + ".md"
+    name = "zayi-1b-" + ("-".join(words) or f"answer-{turn.n}") + ".md"
     return (
         f'<a class="dl" download="{html.escape(name)}" '
         f'href="data:text/markdown;charset=utf-8,{quote(turn.memo)}">{icon_svg("download")}Download .md</a>'
@@ -461,7 +462,7 @@ def render_hero(papers):
         for p in papers
     )
     return (
-        '<div class="hero"><div class="hero-icon" aria-hidden="true"></div><h1>Zayi</h1>'
+        f'<div class="hero"><div class="hero-icon" aria-hidden="true"></div><h1>{BRAND}</h1>'
         f"<p>Ask anything about the <b>{_plural(len(papers), 'research paper')}</b> in the collection. "
         "Every answer cites the excerpts it came from, so each claim can be checked.</p>"
         f'<details class="papers" id="papers"><summary>See the papers</summary><ol>{items}</ol></details></div>'
@@ -883,7 +884,7 @@ def build_app(backend=None, papers=None):
         gr.HTML('<div class="photo"></div><div class="scrim"></div><div class="grain"></div>', elem_id="bg", apply_default_css=False)
         with gr.Row(elem_id="topbar"):
             gr.HTML(
-                '<div class="brand"><span class="logo" aria-hidden="true"></span><b>Zayi</b>'
+                f'<div class="brand"><span class="logo" aria-hidden="true"></span><b>{BRAND}</b>'
                 '<span class="tag">Research assistant</span></div>',
                 apply_default_css=False,
             )

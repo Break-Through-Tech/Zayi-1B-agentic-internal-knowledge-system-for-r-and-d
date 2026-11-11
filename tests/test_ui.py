@@ -147,7 +147,7 @@ def test_memo_markdown_lists_sources_and_flags_bad_citations():
         "citations": {"valid": False, "cited_sources": [1, 5], "invalid_sources": [5]},
     }
     memo = memo_markdown(result)
-    assert memo.startswith("# What does LoRA freeze?\n")
+    assert memo.startswith("# What does LoRA freeze?\n") and "Drafted by the Zayi 1B Research Assistant" in memo
     assert "from 1 paper excerpt." in memo
     assert "It freezes weights [S1] and [S5].\n" in memo
     assert "cites [S5], which is not one of the sources" in memo
@@ -240,7 +240,7 @@ def test_download_link_carries_the_memo():
     href = done.split('href="data:text/markdown;charset=utf-8,')[1].split('"')[0]
     assert unquote(href) == turn.memo
     assert "\n" not in href and "#" not in href and " " not in href  # percent-encoded, so "#" can't cut it short
-    assert 'download="zayi-what-does-lora-freeze.md"' in done
+    assert 'download="zayi-1b-what-does-lora-freeze.md"' in done
 
 
 def test_search_only_never_builds_an_llm():
@@ -317,7 +317,7 @@ def test_question_is_escaped():
 
 def test_empty_thread_shows_the_hero_with_papers():
     out = render_thread([], PAPERS)
-    assert 'class="hero"' in out and "<b>1 research paper</b>" in out
+    assert 'class="hero"' in out and "<b>1 research paper</b>" in out and "<h1>Zayi 1B</h1>" in out
     assert render_thread([], PAPERS * 10).count("<li>") == 10 and "<b>10 research papers</b>" in render_thread([], PAPERS * 10)
     assert "LoRA &lt;v2&gt;" in out and 'href="https://arxiv.org/abs/2106.09685"' in out
 
