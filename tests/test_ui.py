@@ -334,6 +334,13 @@ def test_thread_keeps_turn_ids_unique():
     assert 'class="hero"' not in out
 
 
+def test_styles_are_complete_and_assets_exist():
+    for placeholder in ("FONT", "LOGO_URL", "BG_URL", "ICON_", "CHIP_ICONS"):
+        assert placeholder not in ui.CSS
+    assert ui.LOGO.read_text(encoding="utf-8").startswith("<svg") and ui.BACKGROUND.stat().st_size > 50_000
+    assert "@@" not in ui.CSS and "🫶" not in ui.CSS + render_thread([], PAPERS)
+
+
 def test_app_builds_without_loading_models():
     backend, calls, _ = _backend()
     app = ui.build_app(backend, papers=PAPERS)

@@ -107,8 +107,9 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   ├── test_rag.py
 │   ├── test_retriever.py
 │   └── test_ui.py
-├── assets/
-│   └── favicon.svg
+├── assets/          # app logo (logo.svg) and background photo
+│   ├── background.webp
+│   └── logo.svg
 └── chroma/            # local vector store, generated at runtime
 ```
 
@@ -337,6 +338,8 @@ python scripts/app.py   # opens http://127.0.0.1:7860
   the model. **New chat** clears the page.
 - Startup takes a few seconds while the models load. Math in answers is
   typeset with KaTeX from a CDN (it shows as plain TeX when offline).
+- Background photo: green aurora over Snæfellsnes, Iceland, by Jack Anstey on
+  [Unsplash](https://unsplash.com/photos/MiUyKAHP90s) (Unsplash License).
 
 ### 8. Run the evaluation sweep
 

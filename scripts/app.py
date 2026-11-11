@@ -20,7 +20,7 @@ from transformers.utils import logging as hf_logging
 
 hf_logging.set_verbosity_error()
 
-from src.ui import CSS, FAVICON, HEAD, Backend, build_app, make_theme
+from src.ui import CSS, LOGO, HEAD, Backend, build_app, make_theme
 
 
 def main():
@@ -40,7 +40,7 @@ def main():
         theme=make_theme(),
         css=CSS,
         head=HEAD,
-        favicon_path=FAVICON,
+        favicon_path=LOGO,
         footer_links=[],
     )
 
