@@ -2,10 +2,11 @@
 
 ## Current Status
 
-*Updated 2026-10-10.*
+*Updated 2026-11-14.*
 
 - **Milestone 1 (September) — complete:** Tasks 1–5 done (data review, EDA, cleaning, chunking, embeddings + ChromaDB knowledge base).
-- **Milestone 2 (October, Baseline RAG Pipeline) — in progress:** the ChromaDB retriever (Task 2, #12) is done and on `main`; the baseline LangChain + Gemini pipeline (Task 3, #13) is on `main` too. See the October table under In Progress.
+- **Milestone 2 (October, Baseline RAG Pipeline) — complete:** retriever (#12), baseline LangChain + Gemini pipeline (#13), citation handling + API retries (#14) and the end-to-end evaluation (#15) are on `main`.
+- **Milestone 3 (November, Refining & Handoff) — in progress:** Task 1 (retrieval accuracy, #20) is done; the Gradio UI (Task 6, #19) has its first complete version on `main`. See the November table under In Progress.
 - Still open from September: choose the canonical cleaned data file; validate retrieval against the ground-truth Q&A set when it arrives (November).
 
 ## Completed — Milestone 1 (September)
@@ -76,6 +77,24 @@
 
 ## In Progress
 
+### Milestone 3 (November) — Refining, Dependability & Handoff
+
+| Task | Issue | Assignees | Due | Status |
+| --- | --- | --- | --- | --- |
+| 1. Improve Retrieval Accuracy & Reranking | #20 | Deyon, Brayden | 11/14 | **Done** — on `main` |
+| 2. Improve Answer Generation & Context Quality | #21 | Brayden, Matthew, Ourania | 11/18 | Open |
+| 3. Enhance Source Citation Precision & System Resilience | #22 | Matthew, Tharun | 11/21 | Open (retry and citation fixes from Task 1 already on `main`) |
+| 4. Complete Python RAG Architecture & Technical Documentation | #17 | Tharun, Atai, Deyon | 11/25 | To do |
+| 5. Final Evaluation, Testing & Project Handoff | #18 | Matthew, Deyon, Brayden, Ourania, Tharun | 11/28 | To do |
+| 6. Add UI (Gradio) | #19 | Deyon, Ourania, Matthew | 12/5 | **Mostly done** — first complete version on `main`; memo review still to do |
+
+- **Task 1 (Retrieval Accuracy & Reranking, #20) — done (Deyon):** page labels for all 40 ground-truth questions (`data/eval/ground_truth_pages.json`), so retrieval is now measured at the page level, not just the paper level. With reranking the answer page is in the top 5 for 36/40 questions vs 31/40 without. The rerank pool is configurable and now defaults to 40 candidates; 512/64 chunks and k=5 stay. Full results and the remaining misses: `data/eval/retrieval_tuning_report.md` (reproduce with `python scripts/run_gt_retrieval_eval.py`, no API calls). Also fixed: Gemini 429 retries never fired (the client hides the status code), and invalid citations are now flagged in the result's `citations` key instead of raising.
+- **Task 6 (Gradio UI, #19) — first complete version built by Deyon.** Run `python scripts/app.py` → http://127.0.0.1:7860 (code in `src/ui.py`, tests in `tests/test_ui.py`). Of the issue's three parts, two are done:
+  - [x] **Interactive RAG queries** — chat-style page: ask a question, see each step (search → write answer → check citations, with timings), get the answer with Markdown and math rendered. *Answer* mode calls Gemini; *Search only* shows the retrieved excerpts with no API call (useful under the free-tier limit). Settings for number of excerpts (3–10) and reranking.
+  - [x] **Source citations** — every `S1`-style citation is a link to its source card (paper, pages, full excerpt, "Open in PDF" at the right page); uncited sources are dimmed and invalid citations are flagged.
+  - [ ] **Technical memo review** — needs the memo format from Task 2 (#21). Each answer can already be downloaded as a Markdown file, which the memo view can build on.
+  - Also: errors (missing key, daily quota, rate limit) show as messages instead of crashing; works at phone width; 144 tests passing. New dependencies: `gradio`, `markdown-it-py` — run `pip install -r requirements.txt`.
+
 ### Milestone 2 (October) — Baseline RAG Pipeline
 
 | Task | Issue | Assignees | Due | Status |
@@ -83,12 +102,12 @@
 | 1. Validate September Knowledge Base & Retrieval Setup | #11 | Matthew, Claire | 10/14 | To do (`tests/test_retriever.py`, `tests/test_knowledge_base.py` and notebook 04's sample searches already cover most checks) |
 | 2. Implement ChromaDB Retriever | #12 | Brayden, Matthew, Atai, Deyon | 10/17 | **Done** — on `main` |
 | 3. Build Baseline RAG Pipeline with LangChain & Gemini | #13 | Atai, Brayden, Deyon | 10/24 | **Done** — on `main` |
-| 4. Add Citation Handling & API Reliability | #14 | Tharun, Claire, Matthew | 10/27 | To do |
-| 5. Test & Document End-to-End Baseline RAG System | #15 | Claire, Tharun | 10/31 | To do |
+| 4. Add Citation Handling & API Reliability | #14 | Tharun, Claire, Matthew | 10/27 | **Done** — on `main` |
+| 5. Test & Document End-to-End Baseline RAG System | #15 | Claire, Tharun | 10/31 | **Done** — `data/eval/evaluation_report.md` |
 
 - **Task 2 (Implement ChromaDB Retriever, #12) — done:** `src/retriever.py` wraps `knowledge_base.search` as a LangChain `BaseRetriever` (`PaperRetriever`). Each result is a `Document` with the chunk text and citation metadata (paper title, arXiv id, page range, similarity, rerank score). `get_retriever()` opens the local store and re-embeds only when the collection is missing or stale (embedding model, chunk text, and chunk metadata are all checked; an interrupted build is never reused). Defaults: k=5, reranking on. On the real corpus the correct paper ranks first for 19/20 sample queries.
 - **Task 3 (Baseline RAG with LangChain & Gemini, #13):** `src/rag.py` builds a linear LCEL chain: question → retriever → numbered excerpts → grounded prompt → LLM → answer with inline [S1], [S2]... citations (S-prefixed so they can't be confused with the papers' own reference numbers) + a matching source list. Gemini (`gemini-3.5-flash`) by default, OpenRouter as fallback; keys come from a local `.env` (see `.env.example`). If nothing is retrieved, the LLM is not called. CLI: `scripts/ask.py` (`--retrieve-only` works without a key).
-- Left for Task 4 (#14): citation formatting/validation and custom retry/backoff — the LLM clients' built-in retries are used for now.
+- Tasks 4–5 (#14, #15) — done: retry/backoff with tenacity and citation validation in `src/rag.py`; 40-question end-to-end evaluation in `data/eval/evaluation_report.md`.
 
 ## Blockers
 
