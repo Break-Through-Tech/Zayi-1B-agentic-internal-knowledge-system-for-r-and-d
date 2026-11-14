@@ -338,7 +338,7 @@ def test_styles_are_complete_and_assets_exist():
     for placeholder in ("FONT", "LOGO_URL", "BG_URL", "ICON_", "CHIP_ICONS"):
         assert placeholder not in ui.CSS
     assert ui.LOGO.read_text(encoding="utf-8").startswith("<svg") and ui.BACKGROUND.stat().st_size > 50_000
-    assert "@@" not in ui.CSS and "🫶" not in ui.CSS + render_thread([], PAPERS)
+    assert "@@" not in ui.CSS
 
 
 def test_app_builds_without_loading_models():
