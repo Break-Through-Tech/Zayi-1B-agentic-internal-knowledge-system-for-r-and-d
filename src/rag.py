@@ -260,16 +260,61 @@ def cited_numbers(group):
             numbers.update(range(int(start), int(end) + 1))
     return numbers
 
+def passage_contains_evidence(docs, source_number, required_terms):
+    """Check whether a cited passage contains all specified evidence terms.
+
+    This is a lexical evidence check, not semantic entailment verification.
+    """
+    if not isinstance(source_number, int) or isinstance(source_number, bool):
+        return False
+
+    if source_number < 1 or source_number > len(docs):
+        return False
+
+    if not required_terms:
+        return False
+
+    passage = docs[source_number - 1].page_content.casefold()
+
+    return all(
+        isinstance(term, str)
+        and bool(term.strip())
+        and term.casefold() in passage
+        for term in required_terms
+    )
+
 
 def validate_citations(answer, sources):
-    """Check that cited source labels exist in the retrieved sources."""
-    cited_numbers_ = set().union(*map(cited_numbers, CITATION_GROUP.findall(answer)))
+    """Check citation labels and require citations for substantive answers."""
+    cited_numbers_ = set().union(
+        *map(cited_numbers, CITATION_GROUP.findall(answer))
+    )
 
     valid_numbers = {source["n"] for source in sources}
     invalid_numbers = sorted(cited_numbers_ - valid_numbers)
 
+    # Recognize only a small set of explicit abstention responses.
+    # Avoid treating any answer containing "not enough information"
+    # as an abstention if it also makes factual claims.
+    normalized_answer = answer.strip().rstrip(".").lower()
+
+    abstention_responses = {
+        "i don't have enough information to answer this question",
+        "i cannot answer this question from the provided excerpts",
+        "the provided excerpts do not contain enough information to answer this question",
+        NO_CONTEXT_ANSWER.strip().rstrip(".").lower(),
+    }
+
+    is_abstention = normalized_answer in abstention_responses
+
+    missing_citations = (
+        bool(sources)
+        and not cited_numbers_
+        and not is_abstention
+    )
+
     return {
-        "valid": len(invalid_numbers) == 0,
+        "valid": not invalid_numbers and not missing_citations,
         "cited_sources": sorted(cited_numbers_),
         "invalid_sources": invalid_numbers,
     }

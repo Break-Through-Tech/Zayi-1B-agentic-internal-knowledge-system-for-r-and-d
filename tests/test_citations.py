@@ -1,6 +1,11 @@
 from langchain_core.documents import Document
 
-from src.rag import format_context, sources_from, validate_citations
+from src.rag import (
+    format_context,
+    sources_from,
+    validate_citations,
+    passage_contains_evidence,
+)
 
 def test_valid_answer_citations():
     sources = [{"n": 1}, {"n": 2}]
@@ -105,3 +110,66 @@ def test_citation_ranges_include_every_number():
 def test_papers_own_reference_numbers_are_not_citations():
     result = validate_citations("BART [32] and DPR [12, 13] as cited in [S2].", [{"n": 1}, {"n": 2}])
     assert result == {"valid": True, "cited_sources": [2], "invalid_sources": []}
+
+def test_uncited_answer_is_flagged_when_sources_exist():
+    """A factual answer without citations should not pass validation."""
+    sources = [{"n": 1}, {"n": 2}]
+
+    result = validate_citations(
+        "The system uses retrieval to improve answer accuracy.",
+        sources,
+    )
+
+    assert result["valid"] is False
+    assert result["cited_sources"] == []
+
+def test_no_context_answer_without_citations_is_valid():
+    """No retrieved sources means no citation is required."""
+    result = validate_citations(
+        "I couldn't find enough information to answer the question.",
+        [],
+    )
+
+    assert result["valid"] is True
+    assert result["cited_sources"] == []
+    assert result["invalid_sources"] == []
+
+def test_abstention_with_sources_does_not_require_citations():
+    """An explicit abstention should not need a source citation."""
+    sources = [{"n": 1}, {"n": 2}]
+
+    result = validate_citations(
+        "I don't have enough information to answer this question.",
+        sources,
+    )
+
+    assert result["valid"] is True
+    assert result["cited_sources"] == []
+    assert result["invalid_sources"] == []
+
+def test_claim_is_supported_by_cited_passage():
+    """Check that evidence terms appear in the cited passage."""
+    docs = [
+        make_doc(
+            "LoRA", "2106.09685", 4, 4, "lora-1",
+            "LoRA freezes the pretrained weights."
+        ),
+        make_doc(
+            "RAG", "2005.11401", 2, 3, "rag-1",
+            "RAG combines a retriever with a generator."
+        ),
+    ]
+
+    required_terms = ["lora", "freezes", "pretrained weights"]
+
+    # Correct source contains the expected evidence.
+    assert passage_contains_evidence(docs, 1, required_terms)
+
+    # Wrong source does not contain the expected evidence.
+    assert not passage_contains_evidence(docs, 2, required_terms)
+
+    # Invalid source numbers should be rejected.
+    assert not passage_contains_evidence(docs, 99, required_terms)
+
+    # Empty evidence requirements should be rejected.
+    assert not passage_contains_evidence(docs, 1, [])

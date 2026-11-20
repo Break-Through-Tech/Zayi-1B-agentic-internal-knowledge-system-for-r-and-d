@@ -118,3 +118,49 @@ def test_openai_style_status_code_and_plain_errors():
     assert is_retryable_error(APIStatusError(503))
     assert not is_retryable_error(APIStatusError(401))
     assert not is_retryable_error(ValueError("bad input"))
+
+def test_rate_limit_retries_eventually_stop():
+    """Repeated rate limits must eventually raise an error."""
+
+    rate_limit_error = ClientError(
+        429,
+        {"error": {"message": "Rate limit exceeded"}},
+    )
+
+    fake_generate = Mock()
+    fake_generate.invoke.side_effect = rate_limit_error
+
+    with patch.object(invoke_with_retry.retry, "sleep", return_value=None):
+        with pytest.raises(ClientError):
+            invoke_with_retry(
+                fake_generate,
+                {"question": "Test question"},
+                None,
+            )
+
+    # The API should be retried, but not indefinitely.
+    assert fake_generate.invoke.call_count > 1
+    assert fake_generate.invoke.call_count <= 10
+
+def test_recovers_after_temporary_server_error():
+    """A temporary HTTP 503 error should be retried successfully."""
+
+    class APIStatusError(Exception):
+        def __init__(self, status_code):
+            self.status_code = status_code
+
+    fake_generate = Mock()
+    fake_generate.invoke.side_effect = [
+        APIStatusError(503),
+        "Answer generated successfully",
+    ]
+
+    with patch.object(invoke_with_retry.retry, "sleep", return_value=None):
+        result = invoke_with_retry(
+            fake_generate,
+            {"question": "Test question"},
+            None,
+        )
+
+    assert result == "Answer generated successfully"
+    assert fake_generate.invoke.call_count == 2
