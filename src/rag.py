@@ -62,6 +62,37 @@ RAG_PROMPT = ChatPromptTemplate.from_messages(
     [("system", SYSTEM_PROMPT), ("human", HUMAN_PROMPT)]
 )
 
+CLAIM_VERIFICATION_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """You are a strict research claim verifier.
+
+Evaluate whether the supplied research passage supports the claim.
+
+Use ONLY the passage as evidence. Do not rely on outside knowledge.
+
+Return exactly one of these labels:
+supported
+contradicted
+insufficient_evidence
+
+Definitions:
+- supported: The passage directly supports the claim.
+- contradicted: The passage directly conflicts with the claim.
+- insufficient_evidence: The passage does not establish whether the claim is true.
+
+If uncertain, return insufficient_evidence.
+
+Do not include explanations, Markdown, or additional text.""",
+        ),
+        (
+            "human",
+            "Research passage:\n{passage}\n\nClaim:\n{claim}",
+        ),
+    ]
+)
+
 
 def _sampling(temperature):
     # omitted entirely when None, so the client keeps its own default
@@ -324,64 +355,227 @@ def _generator(llm):
     """Prompt -> LLM -> text. The one definition both entry points use."""
     return RAG_PROMPT | llm | StrOutputParser()
 
+def extract_claims(answer):
+    """Extract sentence-level claims and their cited source numbers.
 
-def _generate_answer(generate, question, docs, config=None):
-    """Shared answer step: excerpts -> {"question", "answer", "sources", "citations"}."""
+    Uncited sentences are retained so they can be flagged during
+    verification rather than silently ignored.
+    """
+    claims = []
+
+    for sentence in re.split(r"(?<=[.!?])\s+(?!\d)", answer.strip()):
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+
+        groups = CITATION_GROUP.findall(sentence)
+        source_numbers = sorted(
+            set().union(*(cited_numbers(group) for group in groups))
+        )
+
+        claim_text = CITATION_GROUP.sub("", sentence).strip()
+
+        if not claim_text:
+            continue
+
+        claims.append({
+            "claim": claim_text,
+            "source_numbers": source_numbers,
+        })
+
+    return claims
+
+def verify_claim(claim, passage, llm, config=None):
+    """Classify whether a research passage supports a generated claim.
+
+    Returns one of: supported, contradicted, insufficient_evidence.
+    Unexpected model responses and verification errors are treated as
+    insufficient evidence rather than as successful verification.
+    """
+    verifier = CLAIM_VERIFICATION_PROMPT | llm | StrOutputParser()
+
+    try:
+        response = invoke_with_retry(
+            verifier,
+            {"claim": claim, "passage": passage},
+            config,
+        )
+    except Exception:
+        return "insufficient_evidence"
+
+    label = response.strip().lower()
+
+    if label in {
+        "supported",
+        "contradicted",
+        "insufficient_evidence",
+    }:
+        return label
+
+    return "insufficient_evidence"
+
+
+def verify_answer_claims(answer, docs, llm, config=None):
+    """Evaluate generated claims against their cited research passages.
+
+    Returns a verification result for each extracted claim.
+    An answer passes only when every claim is supported.
+    """
+    results = []
+
+    for item in extract_claims(answer):
+        claim = item["claim"]
+        source_numbers = item["source_numbers"]
+
+        if not source_numbers:
+            status = "missing_citation"
+        elif any(n < 1 or n > len(docs) for n in source_numbers):
+            status = "invalid_citation"
+        else:
+            # A claim may cite multiple passages that jointly support it.
+            passage = "\n\n".join(
+                docs[n - 1].page_content
+                for n in source_numbers
+            )
+            status = verify_claim(claim, passage, llm, config)
+
+        results.append({
+            "claim": claim,
+            "source_numbers": source_numbers,
+            "status": status,
+        })
+
+    return {
+        "valid": bool(results) and all(
+            item["status"] == "supported"
+            for item in results
+        ),
+        "claims": results,
+    }
+
+def _generate_answer(
+    generate,
+    question,
+    docs,
+    config=None,
+    verify=False,
+    llm=None,
+):
+    """Generate a RAG answer with optional claim-level verification."""
+
+    # Step 1: Generate an answer using retrieved documents.
     if not docs:
         answer, sources = NO_CONTEXT_ANSWER, []
     else:
         answer = invoke_with_retry(
             generate,
-            {"question": question, "context": format_context(docs)},
+            {
+                "question": question,
+                "context": format_context(docs),
+            },
             config,
         )
         sources = sources_from(docs)
-    return {
+
+    # Step 2: Build the standard RAG response.
+    result = {
         "question": question,
         "answer": answer,
         "sources": sources,
         "citations": validate_citations(answer, sources),
     }
 
+    # Step 3: Optionally verify claims against cited passages.
+    if verify:
+        if not docs:
+            # No retrieved documents means no claims to verify.
+            result["verification"] = {
+                "valid": True,
+                "claims": [],
+            }
 
-def build_rag_chain(retriever, llm):
-    """LCEL chain: question str -> {"question", "answer", "sources", "citations"}.
+        elif llm is None:
+            raise ValueError(
+                "An LLM is required when claim verification is enabled."
+            )
 
-    `citations` is `validate_citations(answer, sources)`. An answer citing a
-    label that wasn't retrieved (e.g. [S7] with 5 sources) is returned and
-    flagged there (`valid` False), not discarded — callers decide what to do.
+        else:
+            result["verification"] = verify_answer_claims(
+                answer,
+                docs,
+                llm,
+                config,
+            )
 
-    Retrieves once per question; if nothing is retrieved, returns
-    NO_CONTEXT_ANSWER without calling the LLM."""
+    # Step 4: Return the answer and verification results.
+    return result
+
+
+def build_rag_chain(retriever, llm, verify=False):
+    """Build a RAG chain with optional claim-level verification."""
     generate = _generator(llm)
 
     def _answer(inputs, config):
-        return _generate_answer(generate, inputs["question"], inputs["docs"], config)
+        return _generate_answer(
+            generate,
+            inputs["question"],
+            inputs["docs"],
+            config,
+            verify=verify,
+            llm=llm if verify else None,
+        )
 
     chain = (
         RunnableLambda(_check_question)
         | {"question": RunnablePassthrough(), "docs": retriever}
         | RunnableLambda(_answer)
     )
+
     return chain.with_config(run_name="rag_chain")
 
 
-def answer_from_docs(question, docs, llm, config=None):
-    """Answer from excerpts that were already retrieved — same prompt, retry
-    and citation check as `build_rag_chain`, without retrieving again. Lets a
-    caller (the Gradio app) show the sources before the LLM call finishes."""
-    question, docs = _check_question(question), list(docs)
-    generate = _generator(llm) if docs else None  # no excerpts -> no LLM needed
-    return _generate_answer(generate, question, docs, config)
+def answer_from_docs(
+    question,
+    docs,
+    llm,
+    config=None,
+    verify=False,
+):
+    """Generate an answer from documents with optional claim verification."""
+
+    question = _check_question(question)
+    docs = list(docs)
+
+    generate = _generator(llm) if docs else None
+
+    return _generate_answer(
+        generate,
+        question,
+        docs,
+        config,
+        verify=verify,
+        llm=llm if verify else None,
+    )
 
 
-def answer_question(question, retriever=None, llm=None):
-    """One-call convenience: answer with the default retriever and LLM."""
-    if llm is None:  # first, so a missing key fails before any model loads
+def answer_question(
+    question,
+    retriever=None,
+    llm=None,
+    verify=False,
+):
+    """Answer a question using RAG with optional claim verification."""
+
+    if llm is None:
         llm = get_llm()
-    if retriever is None:
-        # Lazy: loads the knowledge base and embedding model only when needed.
-        from src.retriever import get_retriever
 
+    if retriever is None:
+        from src.retriever import get_retriever
         retriever = get_retriever()
-    return build_rag_chain(retriever, llm).invoke(question)
+
+    return build_rag_chain(
+        retriever,
+        llm,
+        verify=verify,
+    ).invoke(question)
+
