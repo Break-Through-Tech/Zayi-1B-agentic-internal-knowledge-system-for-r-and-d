@@ -3,11 +3,14 @@
 Prints the grounded answer followed by the numbered sources its bracket
 citations refer to. `--retrieve-only` skips the LLM (no API key needed) and
 shows what the retriever would feed it — handy for debugging retrieval.
+`--memo` drafts a structured triage memo on the topic instead of an answer
+(Markdown on stdout, so `> memo.md` saves it; failed checks go to stderr).
 
 Run from the repo root:
     python scripts/ask.py "What does LoRA freeze during fine-tuning?"
     python scripts/ask.py "..." --k 8 --no-rerank --provider openrouter --model <slug>
     python scripts/ask.py "..." --retrieve-only
+    python scripts/ask.py "FlashAttention for long-context training" --memo > memo.md
 """
 
 import argparse
@@ -25,6 +28,7 @@ from src.rag import (
     PROVIDERS,
     MissingConfigError,
     build_rag_chain,
+    citation_warning,
     get_llm,
     page_label,
     source_label,
@@ -52,6 +56,9 @@ def main():
     parser.add_argument(
         "--retrieve-only", action="store_true", help="show retrieved excerpts; no LLM call"
     )
+    parser.add_argument(
+        "--memo", action="store_true", help="draft a triage memo on the topic instead of an answer"
+    )
     args = parser.parse_args()
     if not args.question.strip():
         parser.error("question must not be empty")
@@ -61,6 +68,8 @@ def main():
         parser.error("--rerank-pool has no effect with --no-rerank")
     if args.rerank_pool is not None and args.rerank_pool < args.k:
         parser.error("--rerank-pool must be at least --k")
+    if args.memo and args.retrieve_only:
+        parser.error("--memo needs the LLM; drop --retrieve-only")
 
     llm = None
     if not args.retrieve_only:
@@ -94,14 +103,26 @@ def main():
             print(f"    {preview}\n")
         return
 
+    if args.memo:
+        from src.memo import draft_memo, memo_document
+
+        try:
+            result = draft_memo(args.question, retriever.invoke(args.question), llm)
+        except Exception as err:  # auth, quota, network, reranker: one line, not a traceback
+            sys.exit(f"error: could not draft the memo ({type(err).__name__}): {err}")
+        print(memo_document(result), end="")
+        for check in result["checks"]:
+            if not check["ok"]:
+                print(f"warning: check failed: {check['name']} ({check['detail']})", file=sys.stderr)
+        return
+
     try:
         result = build_rag_chain(retriever, llm).invoke(args.question)
     except Exception as err:  # auth, quota, network, reranker: one line, not a traceback
         sys.exit(f"error: could not answer ({type(err).__name__}): {err}")
     print(result["answer"].strip())
-    if not result["citations"]["valid"]:
-        bad = ", ".join(f"[{source_label(n)}]" for n in result["citations"]["invalid_sources"])
-        print(f"\nwarning: answer cites {bad}, which is not one of the sources below")
+    if warning := citation_warning(result["citations"]):
+        print(f"\nwarning: {warning}")
     if result["sources"]:
         print("\nSources:")
         _print_sources(result["sources"])

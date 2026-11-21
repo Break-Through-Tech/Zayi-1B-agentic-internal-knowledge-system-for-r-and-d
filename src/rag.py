@@ -260,6 +260,21 @@ def cited_numbers(group):
             numbers.update(range(int(start), int(end) + 1))
     return numbers
 
+
+def citation_warning(citations):
+    """One-line warning for a `validate_citations` result, or "" if it's fine.
+
+    `valid` is False both for labels that weren't retrieved and for a
+    substantive answer with no citations at all; say which."""
+    invalid = citations["invalid_sources"]
+    if invalid:
+        labels = ", ".join(f"[{source_label(n)}]" for n in invalid)
+        which = "is not one of" if len(invalid) == 1 else "are not among"
+        return f"the answer cites {labels}, which {which} the retrieved sources"
+    if not citations["valid"]:
+        return "the answer cites none of the retrieved sources, so its claims can't be traced"
+    return ""
+
 def passage_contains_evidence(docs, source_number, required_terms):
     """Check whether a cited passage contains all specified evidence terms.
 

@@ -268,3 +268,20 @@ def test_openrouter_requires_key_and_model(clean_env, no_network, monkeypatch):
 def test_unknown_provider_rejected(clean_env):
     with pytest.raises(ValueError, match="gemini, openrouter"):
         get_llm("nope")
+
+
+def test_citation_warning_tells_invalid_from_missing():
+    from src.rag import citation_warning, validate_citations
+
+    sources = [{"n": 1}, {"n": 2}]
+    assert citation_warning(validate_citations("Claim [S1].", sources)) == ""
+    assert citation_warning(validate_citations("Claim [S9].", sources)) == (
+        "the answer cites [S9], which is not one of the retrieved sources"
+    )
+    assert citation_warning(validate_citations("A [S8] B [S9].", sources)) == (
+        "the answer cites [S8], [S9], which are not among the retrieved sources"
+    )
+    # a substantive answer with no citations: valid is False, yet nothing is "invalid"
+    warning = citation_warning(validate_citations("The excerpts do not describe this.", sources))
+    assert warning.startswith("the answer cites none of the retrieved sources") and "[]" not in warning
+    assert citation_warning(validate_citations("anything", [])) == ""

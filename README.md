@@ -302,19 +302,24 @@ From the repo root:
 ```bash
 python scripts/ask.py "How does Self-RAG decide when to retrieve?"
 python scripts/ask.py "How does Self-RAG decide when to retrieve?" --retrieve-only   # no API key needed
+python scripts/ask.py "FlashAttention for long-context training" --memo > memo.md    # triage memo (see section 7)
 ```
+
+Other options: `--k` (excerpts, default 5), `--no-rerank`, `--rerank-pool`
+(candidates reranked, default 40), `--provider` / `--model`. Run
+`python scripts/ask.py --help` for the full list.
 
 Or from Python:
 
 ```python
-from src.rag import answer_question
+from src.rag import answer_question, citation_warning
 
 result = answer_question("How does Self-RAG decide when to retrieve?")
 print(result["answer"])
 for s in result["sources"]:
     print(s["n"], s["paper_title"], s["page_start"], s["page_end"])
-if not result["citations"]["valid"]:  # answer cited an [S#] that wasn't retrieved
-    print("invalid citations:", result["citations"]["invalid_sources"])
+if warning := citation_warning(result["citations"]):  # cited an [S#] that wasn't retrieved, or nothing
+    print("warning:", warning)
 ```
 
 ### 7. Use the browser app

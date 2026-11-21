@@ -9,14 +9,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.rag import answer_question, page_label, source_label
+from src.rag import answer_question, citation_warning, page_label, source_label
 
 result = answer_question("How does LoRA reduce trainable parameters?")
 
 print("ANSWER:")
 print(result["answer"])
-if not result["citations"]["valid"]:
-    print(f"\nwarning: answer cites missing sources {result['citations']['invalid_sources']}")
+if warning := citation_warning(result["citations"]):
+    print(f"\nwarning: {warning}")
 
 print("\nSOURCES:")
 for source in result["sources"]:
