@@ -82,6 +82,29 @@ MEMO_PROMPT = ChatPromptTemplate.from_messages(
     [("system", MEMO_SYSTEM_PROMPT), ("human", MEMO_HUMAN_PROMPT)]
 )
 
+REVISE_HUMAN_PROMPT = """\
+Excerpts:
+
+{context}
+
+Memo topic: {question}
+
+Current draft (may include the reviewer's own edits):
+
+{draft}
+
+Reviewer's notes:
+{notes}
+
+Revise the draft to address the reviewer's notes. Keep everything that the \
+notes don't ask to change, follow the same format and rules, and cite only \
+the excerpts above. If a note asks for something the excerpts don't cover, \
+say so in that section instead of inventing it."""
+
+REVISE_PROMPT = ChatPromptTemplate.from_messages(
+    [("system", MEMO_SYSTEM_PROMPT), ("human", REVISE_HUMAN_PROMPT)]
+)
+
 _HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
 
 
@@ -167,6 +190,48 @@ def check_memo(memo, n_sources):
     ]
 
 
+def memo_body(document):
+    """The memo sections of a downloaded/edited memo file: drops the title,
+    draft notice and review stamp before the first section, and the Sources
+    list (which is rebuilt from the excerpts)."""
+    lines = document.strip().splitlines()
+    start = next((i for i, line in enumerate(lines) if _HEADING.match(line) and not line.lstrip().startswith("# ")), 0)
+    end = next(
+        (i for i, line in enumerate(lines) if (m := _HEADING.match(line)) and _normalize(m.group(1)) == "sources"),
+        len(lines),
+    )
+    return "\n".join(lines[start:end]).strip()
+
+
+def _result(topic, memo, docs):
+    sources = sources_from(docs)
+    checks = check_memo(memo, len(sources))
+    return {
+        "topic": topic,
+        "memo": memo,
+        "sources": sources,
+        "citations": validate_citations(memo, sources),
+        "checks": checks,
+        "passed": all(c["ok"] for c in checks),
+    }
+
+
+def revise_memo(topic, docs, draft, notes, llm, config=None):
+    """Redraft a memo from the same excerpts to address a reviewer's notes.
+
+    `draft` is the current memo, either the sections alone or a whole memo
+    file (title, notices and Sources are stripped). Same return shape and
+    checks as `draft_memo`; one LLM call."""
+    topic, docs = _check_question(topic), list(docs)
+    if not isinstance(notes, str) or not notes.strip():
+        raise ValueError("revising needs the reviewer's notes")
+    if not docs:
+        raise ValueError("revising needs the excerpts the memo was drafted from")
+    generate = REVISE_PROMPT | llm | StrOutputParser()
+    inputs = {"question": topic, "context": format_context(docs), "draft": memo_body(draft or ""), "notes": notes.strip()}
+    return _result(topic, invoke_with_retry(generate, inputs, config).strip(), docs)
+
+
 def draft_memo(topic, docs, llm, config=None):
     """Draft a triage memo from already-retrieved excerpts.
 
@@ -186,16 +251,7 @@ def draft_memo(topic, docs, llm, config=None):
         }
     generate = MEMO_PROMPT | llm | StrOutputParser()
     memo = invoke_with_retry(generate, {"question": topic, "context": format_context(docs)}, config).strip()
-    sources = sources_from(docs)
-    checks = check_memo(memo, len(sources))
-    return {
-        "topic": topic,
-        "memo": memo,
-        "sources": sources,
-        "citations": validate_citations(memo, sources),
-        "checks": checks,
-        "passed": all(c["ok"] for c in checks),
-    }
+    return _result(topic, memo, docs)
 
 
 def build_memo(topic, retriever=None, llm=None, k=5):
@@ -212,7 +268,7 @@ def build_memo(topic, retriever=None, llm=None, k=5):
     return draft_memo(topic, retriever.invoke(topic), llm)
 
 
-def memo_document(result, when=None, app="Zayi 1B Research Assistant"):
+def memo_document(result, when=None, app="Zayi 1B Research Assistant", revision=1):
     """The memo as a standalone Markdown file: title, draft notice with the
     check results, the memo, and the sources with links to the PDF pages."""
     when = when or datetime.now()
@@ -230,7 +286,8 @@ def memo_document(result, when=None, app="Zayi 1B Research Assistant"):
         f"# Triage memo: {topic}",
         "",
         "*" + " ".join(filter(None, [
-            f"Draft by the {app} on {when:%Y-%m-%d %H:%M} from {n} paper excerpt{'s' if n != 1 else ''}.",
+            f"{'Draft' if revision == 1 else f'Revision {revision}'} by the {app} on {when:%Y-%m-%d %H:%M} "
+            f"from {n} paper excerpt{'s' if n != 1 else ''}.",
             "Not yet reviewed.",
             status,
         ])) + "*",

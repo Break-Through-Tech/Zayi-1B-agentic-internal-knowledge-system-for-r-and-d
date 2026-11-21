@@ -210,8 +210,11 @@ def test_source_cards_mark_uncited_only_after_an_answer():
 
 def test_long_excerpt_gets_preview_and_full_text():
     out = render_sources([_doc(1, text="word " * 200)], anchor="t1-s")
-    assert "Full excerpt" in out and "…" in out and 'id="t1-s1-full"' in out
-    assert "Full excerpt" not in render_sources([_doc(1, text="short")])
+    # the whole excerpt is in one paragraph (CSS clamps it); the toggle comes after it
+    assert "Show full excerpt" in out and 'id="t1-s1-full"' in out
+    assert out.index('class="src-text"') < out.index('class="src-full"')
+    assert "…" not in out
+    assert "Show full excerpt" not in render_sources([_doc(1, text="short")])
 
 
 # --------------------------------------------------------------- query flow
@@ -417,3 +420,50 @@ def test_thread_script_is_valid_javascript(tmp_path):
     script.write_text("(function (element, watch) {" + ui.THREAD_JS + "})", encoding="utf-8")
     result = __import__("subprocess").run([node, "--check", str(script)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_revision_turn_reuses_excerpts_and_sends_notes():
+    revised = MEMO_REPLY.replace("Not covered in the retrieved excerpts.", "Freezing saves memory [S1].")
+    backend, calls, retriever = _backend(reply=revised)
+    first, _ = _run(backend, "LoRA", as_memo=True)
+    turn = Turn(n=2, question="LoRA", as_memo=True, docs=list(first.docs), revision=2, revises=1,
+                notes="Fill in <evidence>.", draft_in=first.memo)
+    snapshots = [(t.phase, render_turn(t)) for t in run_turn(backend, turn)]
+    assert [p for p, _ in snapshots] == ["search", "write", "done"]
+    assert len(retriever.queries) == 1  # only the first memo searched
+    assert "Revising the memo" in snapshots[1][1]
+    out = snapshots[-1][1]
+    assert "Reused the 2 excerpts from memo 1" in out and "Wrote revision 2" in out
+    assert '<span class="bubble-tag">Revise memo 1</span>Fill in &lt;evidence&gt;.' in out
+    assert "Review revision 2" in out and "Freezing saves memory" in out
+    assert "*Revision 2 by the" in turn.memo and 'download="zayi-1b-memo-lora-r2.md"' in out
+
+
+def test_review_panel_has_approve_and_revise():
+    backend, _, _ = _backend(reply=MEMO_REPLY)
+    _, snapshots = _run(backend, "LoRA", as_memo=True)
+    out = snapshots[-1][1]
+    assert 'data-review="approve"' in out and 'data-review="revise"' in out and 'id="t1-tip"' in out
+    assert "Request changes" not in out
+
+
+def test_app_wires_the_revise_bridge():
+    backend, _, _ = _backend()
+    app = ui.build_app(backend, papers=PAPERS)
+    ids = {getattr(b, "elem_id", None) for b in app.blocks.values()}
+    assert {"revise-payload", "revise-go"} <= ids
+    assert "#revise-payload textarea" in ui.THREAD_JS and "#revise-go" in ui.THREAD_JS
+
+
+def test_revision_turn_validates_the_payload():
+    backend, _, _ = _backend(reply=MEMO_REPLY)
+    memo, _ = _run(backend, "LoRA", as_memo=True, k=7)
+    answer = Turn(n=2, question="Q?")
+    list(run_turn(backend, answer))
+    turns = [memo, answer]
+    good = ui.revision_turn('{"n": 1, "draft": "## Bottom line\\nX", "notes": " shorter "}', turns)
+    assert (good.n, good.revises, good.revision, good.notes, good.k) == (3, 1, 2, "shorter", 7)
+    assert good.as_memo and good.docs == memo.docs and good.docs is not memo.docs
+    for bad in ["", "not json", "[]", '{"n": 1, "draft": "x"}', '{"n": 1, "draft": "x", "notes": "  "}',
+                '{"n": 2, "draft": "x", "notes": "y"}', '{"n": 9, "draft": "x", "notes": "y"}', '{"n": "a", "draft": "x", "notes": "y"}']:
+        assert ui.revision_turn(bad, turns) is None, bad

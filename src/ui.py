@@ -5,9 +5,10 @@ the cited answer, and the source excerpts it was drawn from. "Search only"
 shows what the retriever finds without calling the LLM, so exploring the
 papers doesn't use the daily API quota. "Memo" drafts a structured triage memo
 (`src.memo`) and adds the human review step: automatic checks, an editable
-draft, and Approve / Request changes, which download the memo stamped with
-the decision. Each question is answered on its own; earlier turns are not
-sent to the model.
+draft, reviewer notes, then either "Revise with notes" (a new draft from the
+same excerpts, as a new turn) or "Approve and download" (the memo stamped
+with the approval). Each question is answered on its own; earlier turns are
+not sent to the model, except a memo's draft and notes when revising it.
 
 The query flow (`run_turn`) and the HTML rendering are plain Python, so they
 are unit-tested without a browser; `build_app` only wires them to Gradio.
@@ -28,7 +29,7 @@ from urllib.parse import quote
 
 from markdown_it import MarkdownIt
 
-from src.memo import NO_CONTEXT_MEMO, draft_memo, memo_document, pdf_page_url
+from src.memo import NO_CONTEXT_MEMO, draft_memo, memo_document, pdf_page_url, revise_memo
 from src.rag import (
     CITATION_GROUP,
     NO_CONTEXT_ANSWER,
@@ -52,7 +53,10 @@ LOGO = ASSETS / "logo.svg"  # also the tab icon
 # Green aurora over Snæfellsnes, Iceland — photo by Jack Anstey on Unsplash
 # (Unsplash License: free to use), resized to 2560 px WebP.
 BACKGROUND = ASSETS / "background.webp"
-PREVIEW_CHARS = 260
+# Excerpts show their first 5 lines; longer ones get a "Show full excerpt"
+# toggle. 5 lines of the narrowest card hold at least ~200 characters, so text
+# up to this length is never cut off without a toggle.
+PREVIEW_CHARS = 180
 MODE_ANSWER, MODE_SEARCH, MODE_MEMO = "Answer", "Search only", "Memo"
 
 # (chip label, full question, lucide icon name)
@@ -263,6 +267,10 @@ class Backend:
         llm = self._make_llm()
         return {**draft_memo(topic, docs, llm), "model": model_name(llm)}
 
+    def revise(self, topic, docs, draft, notes):
+        llm = self._make_llm()
+        return {**revise_memo(topic, docs, draft, notes, llm), "model": model_name(llm)}
+
 
 @dataclass
 class Turn:
@@ -284,6 +292,10 @@ class Turn:
     model: str = ""
     memo: str = ""  # the downloadable Markdown (answer file or memo draft)
     checks: list = field(default_factory=list)  # memo turns: automatic checks
+    revision: int = 1  # memo turns: 1 = first draft
+    revises: int | None = None  # revision turns: the turn whose memo is revised
+    notes: str = ""  # revision turns: the reviewer's notes
+    draft_in: str = ""  # revision turns: the draft the notes refer to
     error: str = ""
 
     @property
@@ -293,16 +305,18 @@ class Turn:
 
 def run_turn(backend, turn):
     """Search, then (unless search only) answer — yielding the turn after
-    each step so the page shows progress and the sources before the answer."""
+    each step so the page shows progress and the sources before the answer.
+    A revision turn arrives with its memo's excerpts and skips the search."""
     yield turn
     start = time.perf_counter()
-    try:
-        turn.docs = backend.search(turn.question, turn.k, turn.rerank)
-    except Exception as err:
-        log.exception("search failed")
-        turn.phase, turn.error = "error", describe_error(err, "search")
-        yield turn
-        return
+    if turn.revises is None:
+        try:
+            turn.docs = backend.search(turn.question, turn.k, turn.rerank)
+        except Exception as err:
+            log.exception("search failed")
+            turn.phase, turn.error = "error", describe_error(err, "search")
+            yield turn
+            return
     turn.search_s = time.perf_counter() - start
 
     if not turn.generate or not turn.docs:
@@ -316,7 +330,10 @@ def run_turn(backend, turn):
     yield turn
     start = time.perf_counter()
     try:
-        result = (backend.memo if turn.as_memo else backend.answer)(turn.question, turn.docs)
+        if turn.revises is not None:
+            result = backend.revise(turn.question, turn.docs, turn.draft_in, turn.notes)
+        else:
+            result = (backend.memo if turn.as_memo else backend.answer)(turn.question, turn.docs)
     except Exception as err:
         log.exception("answer failed")
         turn.phase, turn.error = "error", describe_error(err, "answer")
@@ -330,12 +347,30 @@ def run_turn(backend, turn):
     if turn.as_memo:
         turn.answer = answer_html(result["memo"], len(turn.docs), turn.anchor)
         turn.checks = result["checks"]
-        turn.memo = memo_document(result)
+        turn.memo = memo_document(result, revision=turn.revision)
     else:
         turn.answer = answer_html(result["answer"], len(turn.docs), turn.anchor)
         turn.memo = memo_markdown(result)
     turn.phase = "done"
     yield turn
+
+
+def revision_turn(payload, turns):
+    """The turn for a review panel's "Revise with notes", or None if the
+    payload (JSON {"n", "draft", "notes"} from THREAD_JS) is malformed, has no
+    notes, or names no finished memo turn. Reuses that memo's excerpts."""
+    try:
+        data = json.loads(payload or "")
+        n, notes, draft = int(data["n"]), str(data["notes"]).strip(), str(data["draft"])
+    except (ValueError, TypeError, KeyError):
+        return None
+    source = next((t for t in turns if t.n == n and t.as_memo and t.phase == "done" and t.docs), None)
+    if source is None or not notes:
+        return None
+    return Turn(
+        n=len(turns) + 1, question=source.question, as_memo=True, k=source.k, rerank=source.rerank,
+        docs=list(source.docs), revision=source.revision + 1, revises=n, notes=notes, draft_in=draft,
+    )
 
 
 # ---------------------------------------------------------------- rendering
@@ -352,13 +387,14 @@ def render_sources(docs, cited=None, anchor="src-"):
     for source, doc in zip(sources_from(docs), docs):
         n = source["n"]
         text = " ".join(doc.page_content.split())
-        preview = text if len(text) <= PREVIEW_CHARS else text[:PREVIEW_CHARS].rsplit(" ", 1)[0] + "…"
         state = "" if cited is None else (" cited" if n in cited else " uncited")
         badge = '<span class="src-badge">Not cited</span>' if cited is not None and n not in cited else ""
-        full = (
-            f'<details class="src-full" id="{anchor}{n}-full"><summary>Full excerpt</summary>'
-            f"<p>{html.escape(text)}</p></details>"
-            if len(text) > len(preview)
+        # The toggle sits under the text, which expands downwards in place (in
+        # a capped, scrollable box), so the text the reader is on never moves.
+        toggle = (
+            f'<details class="src-full" id="{anchor}{n}-full"><summary>'
+            '<span class="more">Show full excerpt</span><span class="less">Show less</span></summary></details>'
+            if len(text) > PREVIEW_CHARS
             else ""
         )
         url = html.escape(pdf_page_url(source["paper_id"], source["page_start"]))
@@ -366,7 +402,7 @@ def render_sources(docs, cited=None, anchor="src-"):
             f'<article class="src-card{state}" id="{anchor}{n}">'
             f'<div class="src-head"><span class="src-tag">{source_label(n)}</span>'
             f'<span class="src-title">{html.escape(source["paper_title"])}</span>{badge}</div>'
-            f'<p class="src-preview">{html.escape(preview)}</p>{full}'
+            f'<p class="src-text">{html.escape(text)}</p>{toggle}'
             f'<div class="src-foot"><span>arXiv:{html.escape(source["paper_id"])} · {html.escape(page_label(source))}</span>'
             f'<a href="{url}" target="_blank" rel="noopener noreferrer">Open in PDF {icon_svg("external")}</a></div>'
             f"</article>"
@@ -391,17 +427,25 @@ def _steps(turn):
         rows.append(("failed", "Search failed", how))
         return rows, "Search failed"
     found = f"Found {_plural(n, 'excerpt')} from {_plural(papers, 'paper')}" if n else "Found no matching excerpts"
-    rows.append(("done", found, f"{how} · {turn.search_s:.1f} s"))
+    if turn.revises is not None:
+        found = f"Reused the {_plural(n, 'excerpt')} from memo {turn.revises}"
+        rows.append(("done", found, "no new search"))
+    else:
+        rows.append(("done", found, f"{how} · {turn.search_s:.1f} s"))
     if not turn.generate or not n:
         return rows, found
     what = "memo" if turn.as_memo else "answer"
+    if turn.revises is not None and turn.phase == "write":
+        rows.append(("pending", "Revising the memo", "with the reviewer's notes"))
+        return rows, "Revising the memo…"
     if turn.phase == "write":
         rows.append(("pending", f"Writing the {what}", "from these excerpts only"))
         return rows, f"Writing the {what}…"
     if turn.answer_s is None:
         rows.append(("failed", "Answering failed", ""))
         return rows, found
-    rows.append(("done", f"Wrote the {what}", " · ".join(filter(None, [turn.model, f"{turn.answer_s:.1f} s"]))))
+    wrote = f"Wrote revision {turn.revision}" if turn.revises is not None else f"Wrote the {what}"
+    rows.append(("done", wrote, " · ".join(filter(None, [turn.model, f"{turn.answer_s:.1f} s"]))))
     if turn.as_memo:
         rows += [("done" if c["ok"] else "failed", c["name"], c["detail"]) for c in turn.checks]
     elif turn.invalid:
@@ -416,7 +460,8 @@ def _steps(turn):
 def _file_name(turn):
     words = re.findall(r"[a-z0-9]+", turn.question.lower())[:6]
     kind = "memo" if turn.as_memo else "answer"
-    return f"zayi-1b-{kind + '-' if turn.as_memo else ''}" + ("-".join(words) or f"{kind}-{turn.n}") + ".md"
+    suffix = f"-r{turn.revision}" if turn.revision > 1 else ""
+    return f"zayi-1b-{kind + '-' if turn.as_memo else ''}" + ("-".join(words) or f"{kind}-{turn.n}") + suffix + ".md"
 
 
 def _memo_link(turn):
@@ -429,9 +474,11 @@ def _memo_link(turn):
 
 def render_review(turn):
     """The human review step for a memo: the automatic checks, the draft as
-    editable Markdown, optional notes, and Approve / Request changes. The
-    buttons are handled in the browser (THREAD_JS): they stamp the decision,
-    date and whether the reviewer edited it, and download the result."""
+    editable Markdown, notes, and two actions handled in the browser
+    (THREAD_JS): "Approve and download" stamps the approval, date, notes and
+    whether the reviewer edited it, and downloads the memo; "Revise with
+    notes" sends the (possibly edited) draft and the notes back to the app,
+    which drafts a revision from the same excerpts as a new turn."""
     n = turn.n
     passed = all(c["ok"] for c in turn.checks)
     checks = "".join(
@@ -442,23 +489,30 @@ def render_review(turn):
     advice = (
         "All automatic checks passed. Read it against the cited sources, edit if needed, then decide."
         if passed
-        else "Some automatic checks failed. Fix the draft below or request changes."
+        else "Some automatic checks failed. Fix the draft below, or write notes and revise."
     )
     file = html.escape(_file_name(turn).removesuffix(".md"))
     return (
         f'<details class="review" id="t{n}-review" open>'
-        f'<summary><span>Review this memo</span><span class="review-state" id="t{n}-state">Not reviewed</span>'
+        f'<summary><span>Review {"revision " + str(turn.revision) if turn.revision > 1 else "this memo"}</span><span class="review-state" id="t{n}-state">Not reviewed</span>'
         f'{icon_svg("chev", "chev")}</summary>'
         f'<p class="review-advice">{advice}</p><ul class="checks">{checks}</ul>'
         f'<label for="t{n}-edit">Draft (Markdown, editable)</label>'
         f'<textarea id="t{n}-edit" class="review-edit" rows="14" spellcheck="true">{html.escape(turn.memo)}</textarea>'
         f'<label for="t{n}-notes">Reviewer notes</label>'
-        f'<textarea id="t{n}-notes" class="review-notes" rows="2" placeholder="Optional: what to change, or why it is approved"></textarea>'
+        f'<textarea id="t{n}-notes" class="review-notes" rows="2" placeholder="What should change? Needed to revise; optional when approving."></textarea>'
         f'<div class="review-actions">'
         f'<button type="button" class="approve" data-review="approve" data-turn="{n}" data-file="{file}">Approve and download</button>'
-        f'<button type="button" class="changes" data-review="changes" data-turn="{n}" data-file="{file}">Request changes</button>'
+        f'<button type="button" class="changes" data-review="revise" data-turn="{n}" data-file="{file}">Revise with notes</button>'
+        f'<span class="review-tip" id="t{n}-tip"></span>'
         f"</div></details>"
     )
+
+
+def _bubble(turn):
+    if turn.revises is None:
+        return html.escape(turn.question)
+    return f'<span class="bubble-tag">Revise memo {turn.revises}</span>{html.escape(turn.notes)}'
 
 
 def render_turn(turn):
@@ -504,7 +558,7 @@ def render_turn(turn):
         body.append(f'<div class="meta">{" ".join(meta)}</div>')
     return (
         f'<section class="turn" id="t{turn.n}">'
-        f'<div class="msg user"><div class="bubble">{html.escape(turn.question)}</div></div>'
+        f'<div class="msg user"><div class="bubble">{_bubble(turn)}</div></div>'
         f'<div class="msg bot"><div class="avatar" aria-hidden="true"></div>'
         f'<div class="content">{think}{"".join(body)}</div></div></section>'
     )
@@ -676,7 +730,7 @@ body:not(:has(.turn)) button#new-chat { visibility: hidden !important; }
 .sources h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 11px; font-weight: 600;
   letter-spacing: .07em; text-transform: uppercase; color: var(--z-muted); }
 .sources h3 span { font-family: var(--z-mono); letter-spacing: 0; color: var(--z-faint); font-weight: 400; }
-.src-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.src-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; align-items: start; }
 .src-card { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--z-border); border-radius: 12px;
   padding: 12px 14px; background: rgba(var(--z-panel),.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   scroll-margin: 80px 0 200px; transition: border-color .2s ease, box-shadow .2s ease, opacity .2s ease; }
@@ -688,10 +742,15 @@ body:not(:has(.turn)) button#new-chat { visibility: hidden !important; }
 .src-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--z-text);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .src-badge { flex: none; font-size: 10.5px; color: var(--z-faint); border: 1px solid var(--z-border-strong); border-radius: 999px; padding: 1px 7px; }
-.src-preview, .src-full p { margin: 8px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--z-soft); }
-.src-card:has(.src-full[open]) .src-preview { display: none; }
-.src-full summary { cursor: pointer; margin-top: 6px; font-size: 12px; color: var(--z-muted); }
+.src-text { margin: 8px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--z-soft); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.src-card:has(.src-full[open]) .src-text { display: block; -webkit-line-clamp: unset; max-height: 19em; overflow-y: auto;
+  padding-right: 6px; scrollbar-width: thin; scrollbar-color: var(--z-border-strong) transparent; }
+.src-full summary { cursor: pointer; margin-top: 6px; font-size: 12px; color: var(--z-muted); list-style: none; }
+.src-full summary::-webkit-details-marker { display: none; }
 .src-full summary:hover { color: var(--z-text); }
+.src-full .less, .src-full[open] .more { display: none; }
+.src-full[open] .less { display: inline; }
 .src-foot { margin-top: auto; padding-top: 10px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
   font-family: var(--z-mono); font-size: 11px; color: var(--z-faint); }
 .src-foot a { display: inline-flex; align-items: center; gap: 4px; color: var(--z-muted); text-decoration: none; font-family: FONT; font-size: 12px; }
@@ -726,6 +785,9 @@ body:not(:has(.turn)) button#new-chat { visibility: hidden !important; }
 .review-actions .approve { color: #04261a; border: 0; background: linear-gradient(180deg, #a6f8cf, var(--z-accent)); }
 .review-actions .changes { color: var(--z-soft); background: rgba(255,255,255,.05); border: 1px solid var(--z-border-strong); }
 .review-actions button:hover { transform: translateY(-1px); }
+.review-tip { align-self: center; font-size: 12.5px; color: var(--z-warn); }
+.bubble-tag { display: block; margin-bottom: 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--z-accent); }
+.offscreen { position: absolute !important; left: -10000px !important; width: 1px !important; height: 1px !important; overflow: hidden !important; }
 
 .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 14px;
   font-family: var(--z-mono); font-size: 11px; color: var(--z-faint); }
@@ -882,23 +944,40 @@ function stamp(d) {
   const p = (x) => String(x).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+function revise(n, draft, notes) {
+  // hand the draft + notes to the hidden Gradio textbox, then press its button
+  const box = document.querySelector('#revise-payload textarea'), go = document.querySelector('#revise-go');
+  if (!box || !go) return false;
+  box.value = JSON.stringify({ n: Number(n), draft, notes });
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  setTimeout(() => go.click(), 60);
+  return true;
+}
 element.addEventListener('click', (e) => {
   const b = e.target.closest('button[data-review]');
   if (!b) return;
   const n = b.dataset.turn, approved = b.dataset.review === 'approve';
-  const draft = element.querySelector(`#t${n}-edit`), notes = element.querySelector(`#t${n}-notes`).value.trim();
-  const edited = draft.value !== draft.defaultValue, when = stamp(new Date());
-  const status = approved ? 'Approved' : 'Changes requested';
+  const draft = element.querySelector(`#t${n}-edit`), notesBox = element.querySelector(`#t${n}-notes`);
+  const notes = notesBox.value.trim(), tip = element.querySelector(`#t${n}-tip`), when = stamp(new Date());
+  if (!approved) {
+    if (document.querySelector('button#send:disabled')) { tip.textContent = 'Wait for the current answer to finish.'; return; }
+    if (!notes) { tip.textContent = 'Write what should change first.'; notesBox.focus(); return; }
+    tip.textContent = '';
+    if (revise(n, draft.value, notes)) { decided.set(n, { status: 'Revision requested', when, approved: false }); sync(); }
+    return;
+  }
+  tip.textContent = '';
+  const edited = draft.value !== draft.defaultValue;
   const lines = draft.value.replace(/ ?Not yet reviewed\\./, '').split('\\n');
-  const review = [`> **Review:** ${status} on ${when} (${edited ? 'edited by the reviewer' : 'no edits'}).`];
+  const review = [`> **Review:** Approved on ${when} (${edited ? 'edited by the reviewer' : 'no edits'}).`];
   if (notes) review.push('>', `> **Reviewer notes:** ${notes.replace(/\\s*\\n\\s*/g, ' ')}`);
   lines.splice(lines[0].startsWith('# ') ? 1 : 0, 0, '', ...review);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([lines.join('\\n')], { type: 'text/markdown' }));
-  a.download = `${b.dataset.file}-${approved ? 'approved' : 'changes-requested'}.md`;
+  a.download = `${b.dataset.file}-approved.md`;
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  decided.set(n, { status, when, approved });
+  decided.set(n, { status: 'Approved', when, approved: true });
   sync();
 });
 function sync() {
@@ -1003,6 +1082,16 @@ def build_app(backend=None, papers=None):
         for _ in run_turn(backend, turn):
             yield render_thread(turns, papers), turns, ""
 
+    def revise(payload, turns):
+        """A memo's "Revise with notes": a new memo turn from the same excerpts."""
+        turn = revision_turn(payload, turns)
+        if turn is None:
+            yield gr.skip(), gr.skip(), ""
+            return
+        turns = [*turns, turn]
+        for _ in run_turn(backend, turn):
+            yield render_thread(turns, papers), turns, ""
+
     gr.set_static_paths([ASSETS])  # the background photo
     with gr.Blocks(title=APP_TITLE, analytics_enabled=False) as app:
         gr.HTML('<div class="photo"></div><div class="scrim"></div><div class="grain"></div>', elem_id="bg", apply_default_css=False)
@@ -1049,6 +1138,10 @@ def build_app(backend=None, papers=None):
                 apply_default_css=False,
             )
 
+        # The review panel's "Revise with notes" posts through these (see THREAD_JS).
+        revise_payload = gr.Textbox(show_label=False, container=False, elem_id="revise-payload", elem_classes="offscreen")
+        revise_go = gr.Button("Revise", elem_id="revise-go", elem_classes="offscreen")
+
         # Locked while a question runs, so Enter can't start a second one.
         controls = [question, send, new_chat, *chips]
 
@@ -1071,5 +1164,17 @@ def build_app(backend=None, papers=None):
                 )
                 .then(unlock, outputs=controls, queue=False, show_progress="hidden")
             )
+        (
+            revise_go.click(lock, outputs=controls, queue=False, show_progress="hidden")
+            .then(
+                revise,
+                inputs=[revise_payload, turns],
+                outputs=[thread, turns, revise_payload],
+                show_progress="hidden",
+                concurrency_id="query",
+                concurrency_limit=1,
+            )
+            .then(unlock, outputs=controls, queue=False, show_progress="hidden")
+        )
         new_chat.click(lambda: ([], render_thread([], papers)), outputs=[turns, thread], queue=False, show_progress="hidden")
     return app

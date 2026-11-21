@@ -57,7 +57,7 @@ The current codebase contains the actual retrieval stack used for experimentatio
 - LangChain retriever over the knowledge base (`src/retriever.py`) returning Documents with citation metadata
 - Baseline RAG pipeline (`src/rag.py`): retrieved excerpts → grounded Gemini answer with [S1]-style citations, plus a CLI (`scripts/ask.py`)
 - Browser app (`src/ui.py`, `scripts/app.py`): chat-style Gradio UI for asking questions and checking each citation against its source excerpt
-- Triage memos (`src/memo.py`): structured, cited memos (bottom line, key findings, how it works, evidence, limitations) with automatic checks, and a human review step in the app (edit, approve or request changes)
+- Triage memos (`src/memo.py`): structured, cited memos (bottom line, key findings, how it works, evidence, limitations) with automatic checks, and a human review step in the app (edit, revise with notes, approve)
 
 ## Repository structure
 
@@ -338,9 +338,12 @@ python scripts/app.py   # opens http://127.0.0.1:7860
   checks run first (all sections present, every citation points at a
   retrieved excerpt, every section cited or marked "Not covered in the
   retrieved excerpts"). The review panel below the memo holds the draft as
-  editable Markdown plus reviewer notes; **Approve and download** or
-  **Request changes** downloads the memo stamped with the decision, the date,
-  any notes, and whether the reviewer edited it. One API call per memo.
+  editable Markdown plus reviewer notes. **Revise with notes** sends the
+  draft (including any edits) and the notes back to Gemini, which writes a
+  revision from the same excerpts as a new turn with its own checks and
+  review. **Approve and download** saves the memo stamped with the approval,
+  the date, any notes, and whether the reviewer edited it. One API call per
+  memo or revision.
 - **Search only** shows the closest excerpts without calling Gemini, so it
   needs no API key and doesn't use the daily quota (20 requests/day on the
   free tier).

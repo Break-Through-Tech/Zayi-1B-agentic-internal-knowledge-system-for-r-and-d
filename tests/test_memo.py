@@ -13,7 +13,9 @@ from src.memo import (
     build_memo,
     check_memo,
     draft_memo,
+    memo_body,
     memo_document,
+    revise_memo,
     split_sections,
 )
 
@@ -167,3 +169,34 @@ def test_memo_document_lists_failed_checks():
     doc = memo_document(result)
     assert not result["passed"]
     assert "Automatic checks failed: citations point at retrieved excerpts." in doc
+
+
+def test_memo_body_strips_title_notices_and_sources():
+    doc = memo_document(draft_memo("FlashAttention", DOCS, _llm()))
+    doc = doc.replace("# Triage memo: FlashAttention\n", "# Triage memo: FlashAttention\n\n> **Review:** Approved\n")
+    body = memo_body(doc)
+    assert body.startswith("## Bottom line") and body.endswith(NOT_COVERED)
+    assert "Sources" not in body and "Triage memo" not in body and "Review:" not in body
+    assert memo_body(GOOD) == GOOD.strip()  # sections alone pass through
+
+
+def test_revise_memo_sends_draft_notes_and_excerpts():
+    llm = _llm(GOOD.replace("3x faster [S2]", "3x faster on GPT-2 at 1K context [S2]"))
+    draft = memo_document(draft_memo("FlashAttention", DOCS, _llm()))
+    result = revise_memo("FlashAttention", DOCS, draft, "  Add the context length.  ", llm)
+    assert result["passed"] and "1K context" in result["memo"]
+    human = llm.prompts[0][1].content
+    assert "Reviewer's notes:\nAdd the context length." in human
+    assert "Current draft (may include the reviewer's own edits):\n\n## Bottom line" in human
+    assert "## Sources" not in human and "[S2] FlashAttention (arXiv:2205.14135), p. 7" in human
+
+
+@pytest.mark.parametrize("notes, docs", [("", DOCS), ("   ", DOCS), (None, DOCS), ("fix it", [])])
+def test_revise_memo_needs_notes_and_excerpts(notes, docs):
+    with pytest.raises(ValueError):
+        revise_memo("FlashAttention", docs, GOOD, notes, _llm())
+
+
+def test_memo_document_labels_revisions():
+    doc = memo_document(draft_memo("FlashAttention", DOCS, _llm()), revision=2)
+    assert "*Revision 2 by the Zayi 1B Research Assistant" in doc
