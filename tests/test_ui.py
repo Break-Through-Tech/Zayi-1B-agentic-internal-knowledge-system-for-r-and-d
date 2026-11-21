@@ -346,3 +346,74 @@ def test_app_builds_without_loading_models():
     app = ui.build_app(backend, papers=PAPERS)
     assert app.title == ui.APP_TITLE
     assert calls == {"retriever": [], "llm": 0}  # nothing runs until a question is asked
+
+
+# ------------------------------------------------------------- memo review
+
+MEMO_REPLY = """## Bottom line
+LoRA freezes the base weights [S1].
+
+## Key findings
+- Freezes weights [S1].
+
+## How it works
+Low-rank updates [S1].
+
+## Evidence and results
+Not covered in the retrieved excerpts.
+
+## Limitations and open questions
+RAG is a separate method [S2]."""
+
+
+def test_memo_turn_drafts_memo_and_shows_review_panel():
+    backend, calls, _ = _backend(reply=MEMO_REPLY)
+    turn, snapshots = _run(backend, "LoRA <for us>", as_memo=True)
+    assert [p for p, _ in snapshots] == ["search", "write", "done"]
+    assert "Writing the memo" in snapshots[1][1]
+    assert calls["llm"] == 1 and turn.cited == {1, 2} and not turn.invalid
+    assert [c["ok"] for c in turn.checks] == [True, True, True]
+    out = snapshots[-1][1]
+    assert 'class="prose memo"' in out and "<h2>Bottom line</h2>" in out
+    assert "Wrote the memo" in out and "All sections present" in out
+    assert 'id="t1-review"' in out and 'id="t1-edit"' in out and 'data-review="approve"' in out
+    # the editable draft is the downloadable memo, escaped
+    assert "# Triage memo: LoRA &lt;for us&gt;" in out and "<for us>" not in out
+    assert 'download="zayi-1b-memo-lora-for-us.md"' in out and "Download draft" in out
+    assert 'data-file="zayi-1b-memo-lora-for-us"' in out
+
+
+def test_memo_turn_shows_failed_checks():
+    backend, _, _ = _backend(reply="Just a paragraph citing [S7].")
+    turn, snapshots = _run(backend, as_memo=True)
+    out = snapshots[-1][1]
+    assert [c["ok"] for c in turn.checks] == [False, False, False]
+    assert 'class="step failed"' in out and "S7 not among the 2 excerpts" in out
+    assert "Some automatic checks failed" in out
+    assert "Automatic checks failed" in turn.memo
+
+
+def test_memo_turn_without_excerpts_skips_llm_and_review():
+    backend, calls, _ = _backend(docs=[])
+    turn, snapshots = _run(backend, as_memo=True)
+    assert calls["llm"] == 0 and "no memo was drafted" in turn.answer
+    assert 'class="review"' not in snapshots[-1][1]
+
+
+def test_answer_turns_have_no_review_panel():
+    backend, _, _ = _backend()
+    _, snapshots = _run(backend)
+    assert 'class="review"' not in snapshots[-1][1] and "Download .md" in snapshots[-1][1]
+
+
+def test_thread_script_is_valid_javascript(tmp_path):
+    # THREAD_JS is a normal Python string: a "\\n" written as "\n" becomes a
+    # raw newline inside a JS string literal and breaks the whole script.
+    assert "split('\\n')" in ui.THREAD_JS and "join('\\n')" in ui.THREAD_JS
+    node = __import__("shutil").which("node")
+    if node is None:
+        pytest.skip("node not installed")
+    script = tmp_path / "thread.js"
+    script.write_text("(function (element, watch) {" + ui.THREAD_JS + "})", encoding="utf-8")
+    result = __import__("subprocess").run([node, "--check", str(script)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr

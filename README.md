@@ -57,6 +57,7 @@ The current codebase contains the actual retrieval stack used for experimentatio
 - LangChain retriever over the knowledge base (`src/retriever.py`) returning Documents with citation metadata
 - Baseline RAG pipeline (`src/rag.py`): retrieved excerpts → grounded Gemini answer with [S1]-style citations, plus a CLI (`scripts/ask.py`)
 - Browser app (`src/ui.py`, `scripts/app.py`): chat-style Gradio UI for asking questions and checking each citation against its source excerpt
+- Triage memos (`src/memo.py`): structured, cited memos (bottom line, key findings, how it works, evidence, limitations) with automatic checks, and a human review step in the app (edit, approve or request changes)
 
 ## Repository structure
 
@@ -99,11 +100,13 @@ The current codebase contains the actual retrieval stack used for experimentatio
 │   ├── rag.py
 │   ├── retrieval_eval.py
 │   ├── retriever.py
+│   ├── memo.py
 │   └── ui.py
 ├── tests/
 │   ├── test_chunking.py
 │   ├── test_cleaning.py
 │   ├── test_knowledge_base.py
+│   ├── test_memo.py
 │   ├── test_rag.py
 │   ├── test_retriever.py
 │   └── test_ui.py
@@ -329,6 +332,15 @@ python scripts/app.py   # opens http://127.0.0.1:7860
   didn't use are dimmed, and a citation that points to no retrieved source is
   flagged. The collapsible steps above each answer show what was retrieved
   and how long each step took.
+- **Memo** drafts a triage memo on a topic instead of a short answer: five
+  fixed sections (Bottom line, Key findings, How it works, Evidence and
+  results, Limitations and open questions), every claim cited. Automatic
+  checks run first (all sections present, every citation points at a
+  retrieved excerpt, every section cited or marked "Not covered in the
+  retrieved excerpts"). The review panel below the memo holds the draft as
+  editable Markdown plus reviewer notes; **Approve and download** or
+  **Request changes** downloads the memo stamped with the decision, the date,
+  any notes, and whether the reviewer edited it. One API call per memo.
 - **Search only** shows the closest excerpts without calling Gemini, so it
   needs no API key and doesn't use the daily quota (20 requests/day on the
   free tier).
