@@ -31,7 +31,7 @@ approve each memo before it is used.
 - Browser app (Gradio) and command-line tool built on the same pipeline.
 - Measured retrieval: reranking 40 candidates finds a page holding the answer
   in the top 5 for 36 of 40 ground-truth questions (31 without reranking).
-- Test suite (184 tests, no API key needed) covering every module.
+- Test suite (190 tests, no API key needed) covering every module.
 
 ## Contents
 
@@ -141,7 +141,7 @@ testable on its own and every answer can be traced to its excerpts.
 | `scripts/ask.py` | Command-line answers, memos and retrieval-only debugging | see `--help` |
 | `scripts/app.py` | Launches the browser app | `--port`, `--no-browser` |
 | `scripts/run_rag.py` | Minimal Python example of one answer | |
-| `scripts/evaluate_rag.py` | End-to-end eval on the 40 ground-truth questions (uses the API) | `--limit` |
+| `scripts/evaluate_rag.py` | End-to-end eval on the 40 ground-truth questions (uses the API) | `--limit`, `--rerank`, `--output`, `--resume` |
 | `scripts/generate_eval_report.py` | Builds `evaluation_report.md` from the eval output and manual grades | |
 | `scripts/run_gt_retrieval_eval.py` | Page-level retrieval eval on the 40 questions (no API calls) | |
 | `scripts/run_retrieval_sweep.py` | Chunk-size and rerank sweep on the sample query set (no API calls) | |
@@ -290,15 +290,21 @@ the page(s) holding each answer's evidence.
 
 Notes for a faithful rerun:
 
-- The October baseline ran with reranking off and a Flash-Lite model. To
-  repeat it like-for-like, set `GEMINI_MODEL` to that model in `.env`.
-  `evaluate_rag.py` always runs without reranking.
-- `evaluate_rag.py` overwrites `data/eval/rag_evaluation.json`. Correctness
-  grades are manual (`data/eval/manual_scores.json`; correct = 1, partial =
-  0.5, wrong = 0), so a new run needs regrading before
+- `evaluate_rag.py` defaults reproduce the October baseline: reranking off,
+  results in `data/eval/rag_evaluation.json`. That run used a Flash-Lite
+  model, so for a like-for-like repeat set `GEMINI_MODEL` (or `--model`) to
+  that model. The tuned pipeline runs with `--rerank` (pool 40, k = 5); write
+  it to another file with `--output` so the October results stay intact.
+- Besides paper-level hit@5, each record now has page-level hit@5, whether
+  the answer cited an evidence page, and citation validity under the current
+  rules (an uncited answer counts as invalid).
+- Correctness grades are manual (`data/eval/manual_scores.json`; correct = 1,
+  partial = 0.5, wrong = 0), so a new run needs regrading before
   `generate_eval_report.py`.
-- 40 calls exceed the free tier's 20 requests a day. Split the run across
-  days or use a paid key.
+- 40 calls exceed the free tier's 20 requests a day. `--resume` skips
+  questions already answered with the same settings, and a run stops cleanly
+  when the daily quota runs out, so it can be split across days:
+  `python scripts/evaluate_rag.py --limit 40 --rerank --output data/eval/final_rag_evaluation.json --resume`.
 - Retrieval numbers are deterministic for a given corpus and config.
 
 ## Testing
@@ -307,7 +313,7 @@ Notes for a faithful rerun:
 pytest -q
 ```
 
-The suite (184 tests) takes about 15 seconds. It uses small in-memory
+The suite (190 tests) takes under a minute. It uses small in-memory
 ChromaDB collections, the real embedding and reranking models, and fake
 LLMs, so it needs no API key and makes no API calls. Once the models are
 cached (after the first app or CLI run), it also runs offline. It covers chunking
