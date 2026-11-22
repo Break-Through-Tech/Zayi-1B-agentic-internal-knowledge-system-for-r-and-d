@@ -107,3 +107,41 @@ def test_resume_drops_records_from_other_settings():
     }
     kept, dropped = ev.same_config(previous, {"date": "2026-11-22", "model": "m", "rerank": True})
     assert list(kept) == ["Q1?"] and dropped == 2
+
+
+# --- scripts/compare_evaluations.py -------------------------------------------
+
+_cspec = importlib.util.spec_from_file_location(
+    "compare_evaluations", SCRIPT.with_name("compare_evaluations.py")
+)
+cmp = importlib.util.module_from_spec(_cspec)
+_cspec.loader.exec_module(cmp)
+
+
+def test_rescore_uses_current_rules_and_skips_unanswered():
+    qs = questions(3)
+    results = [
+        {"question": "Q1?", "status": "success", "generated_answer": "Low-rank [S1].",
+         "sources": [source(1)], "citation_valid": True},  # stale stored fields are ignored
+        {"question": "Q2?", "status": "success", "generated_answer": "No citation here.",
+         "sources": [source(1)], "citation_valid": True},
+        {"question": "Q3?", "status": "error"},
+    ]
+    scored = cmp.rescore(qs, [[3]] * 3, results)
+    assert set(scored) == {1, 2}
+    assert scored[1]["citation_valid"] and not scored[2]["citation_valid"]
+
+
+def test_summary_counts_grades_only_for_answered_questions(tmp_path):
+    scored = {1: ev.score(ITEM, "Low-rank [S1].", [source(1)], [3]),
+              2: ev.score(ITEM, "Frozen [S1].", [source(1, start=8)], [3])}
+    grades_file = tmp_path / "g.json"
+    grades_file.write_text(json.dumps({"scores": {"1": "correct", "2": "partial", "3": "incorrect"}}))
+    summary = cmp.summarize(scored, cmp.load_grades(grades_file), total=3)
+    assert summary["answered"] == 2 and summary["page_hit_at_5"] == 1
+    assert summary["graded"] == 2 and summary["incorrect"] == 0
+    assert summary["weighted_quality"] == 0.75
+
+    grades_file.write_text(json.dumps({"scores": {"1": "maybe"}}))
+    with pytest.raises(ValueError, match="unknown grades"):
+        cmp.load_grades(grades_file)
