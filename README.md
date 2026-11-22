@@ -31,7 +31,7 @@ approve each memo before it is used.
 - Browser app (Gradio) and command-line tool built on the same pipeline.
 - Measured retrieval: reranking 40 candidates finds a page holding the answer
   in the top 5 for 36 of 40 ground-truth questions (31 without reranking).
-- Test suite (190 tests, no API key needed) covering every module.
+- Test suite (195 tests, no API key needed) covering every module.
 
 ## Contents
 
@@ -146,6 +146,8 @@ testable on its own and every answer can be traced to its excerpts.
 | `scripts/run_gt_retrieval_eval.py` | Page-level retrieval eval on the 40 questions (no API calls) | |
 | `scripts/run_retrieval_sweep.py` | Chunk-size and rerank sweep on the sample query set (no API calls) | |
 | `scripts/test_reference_filtering.py` | Experiment: does dropping bibliography pages help retrieval? | |
+| `scripts/compare_evaluations.py` | October vs final comparison tables from saved results (no API calls) | |
+| `scripts/evaluate_memos.py` | Memo evaluation: one memo per paper, checks, citation precision, review verdicts | `--resume`, `--report` |
 
 ## Usage
 
@@ -313,7 +315,7 @@ Notes for a faithful rerun:
 pytest -q
 ```
 
-The suite (190 tests) takes under a minute. It uses small in-memory
+The suite (195 tests) takes under a minute. It uses small in-memory
 ChromaDB collections, the real embedding and reranking models, and fake
 LLMs, so it needs no API key and makes no API calls. Once the models are
 cached (after the first app or CLI run), it also runs offline. It covers chunking
@@ -364,6 +366,7 @@ For a notebook kernel: `python -m ipykernel install --user --name zayi-rag`.
 .
 ├── README.md
 ├── requirements.txt
+├── pytest.ini                    # test discovery and import path
 ├── .env.example                  # copy to .env for API keys (gitignored)
 ├── Challenge-Project-Overview.md
 ├── Progress.md

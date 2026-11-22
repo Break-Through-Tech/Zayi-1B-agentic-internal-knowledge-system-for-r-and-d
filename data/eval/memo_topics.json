@@ -1,0 +1,15 @@
+{
+  "description": "One triage-memo topic per paper, phrased the way an engineer would ask. Used by scripts/evaluate_memos.py to measure the brief's first-pass approval rate and citation precision for memos.",
+  "topics": [
+    {"paper_id": "2005.11401", "topic": "Retrieval-augmented generation with a learned retriever and a seq2seq generator (RAG-Sequence vs RAG-Token)"},
+    {"paper_id": "2312.10997", "topic": "Naive, Advanced and Modular RAG paradigms from the RAG survey"},
+    {"paper_id": "2310.11511", "topic": "Self-RAG: adaptive retrieval and self-critique with reflection tokens"},
+    {"paper_id": "2401.15884", "topic": "Corrective RAG (CRAG): grading retrieval quality and falling back to web search"},
+    {"paper_id": "2210.03629", "topic": "ReAct: interleaving reasoning traces and actions in language model agents"},
+    {"paper_id": "2307.03172", "topic": "How language models use long input contexts and where relevant information should go"},
+    {"paper_id": "2309.15217", "topic": "Reference-free evaluation of RAG pipelines with Ragas"},
+    {"paper_id": "2106.09685", "topic": "LoRA for parameter-efficient fine-tuning of large language models"},
+    {"paper_id": "2205.14135", "topic": "FlashAttention for long-context training"},
+    {"paper_id": "2004.04906", "topic": "Dense passage retrieval for open-domain question answering"}
+  ]
+}
